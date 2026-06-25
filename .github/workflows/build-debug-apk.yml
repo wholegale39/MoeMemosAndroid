@@ -1,0 +1,51 @@
+name: Build Debug APK
+
+on:
+  push:
+    branches:
+      - main
+      - "feat/**"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-debug-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build debug APK
+        run: ./gradlew :app:assembleDebug --no-daemon
+
+      - name: Rename APK with short SHA
+        run: |
+          APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
+          if [[ ! -f "$APK_PATH" ]]; then
+            echo "APK not found at $APK_PATH"
+            exit 1
+          fi
+          SHORT_SHA="${GITHUB_SHA::7}"
+          BRANCH="${GITHUB_REF_NAME//\//-}"
+          cp "$APK_PATH" "moememos-debug-${BRANCH}-${SHORT_SHA}.apk"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: moememos-debug-${{ github.ref_name }}-${{ github.sha }}
+          path: moememos-debug-*.apk
+          retention-days: 90
+          if-no-files-found: error
