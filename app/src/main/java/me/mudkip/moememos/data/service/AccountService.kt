@@ -366,6 +366,20 @@ class AccountService @Inject constructor(
 
     fun createMemosV1Client(host: String, accessToken: String?): Pair<OkHttpClient, MemosV1Api> {
         val client = okHttpClient.newBuilder().apply {
+            // Debug logging interceptor — logs request URL, Authorization header presence,
+            // response status, and response body (truncated). Remove for production.
+            addInterceptor { chain ->
+                val request = chain.request()
+                android.util.Log.d("MoeMemosHttp", ">> ${request.method} ${request.url}")
+                android.util.Log.d("MoeMemosHttp", ">> Authorization header present: ${request.header("Authorization") != null}")
+                val authPreview = request.header("Authorization")?.take(20)
+                android.util.Log.d("MoeMemosHttp", ">> Authorization preview: $authPreview...")
+                val response = chain.proceed(request)
+                android.util.Log.d("MoeMemosHttp", "<< ${response.code} ${response.message} for ${request.url}")
+                val bodyString = response.peekBody(2048L).string()
+                android.util.Log.d("MoeMemosHttp", "<< Body preview: $bodyString")
+                response
+            }
             if (!accessToken.isNullOrBlank()) {
                 addNetworkInterceptor { chain ->
                     var request = chain.request()
