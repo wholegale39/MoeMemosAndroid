@@ -208,10 +208,18 @@ class MemosV1Repository(
             return resp
         }
 
-        return memosApi.getUserSetting(getId(resp.data.identifier)).mapSuccess {
-            resp.data.copy(
-                defaultVisibility = generalSetting?.memoVisibility?.toMemoVisibility() ?: MemoVisibility.PRIVATE
-            )
+        // Graceful degradation: getUserSetting may fail on some Memos versions
+        // (e.g. canary/main with user resource name changes). Don't block login
+        // for a non-critical setting — fall back to PRIVATE default.
+        val settingResp = memosApi.getUserSetting(getId(resp.data.identifier))
+        if (settingResp is ApiResponse.Success) {
+            return settingResp.mapSuccess {
+                resp.data.copy(
+                    defaultVisibility = generalSetting?.memoVisibility?.toMemoVisibility() ?: MemoVisibility.PRIVATE
+                )
+            }
         }
+        // getUserSetting failed — return user with default visibility instead of failing
+        return ApiResponse.Success(resp.data)
     }
 }
