@@ -585,9 +585,7 @@ class AccountService @Inject constructor(
 
     private fun shouldAttachAccessToken(requestUrl: HttpUrl, host: String): Boolean {
         val baseUrl = host.toHttpUrlOrNull() ?: return false
-        return requestUrl.scheme == baseUrl.scheme &&
-            requestUrl.host == baseUrl.host &&
-            requestUrl.port == baseUrl.port
+        return requestUrl.host == baseUrl.host
     }
 
     private suspend fun awaitInitialization() {
