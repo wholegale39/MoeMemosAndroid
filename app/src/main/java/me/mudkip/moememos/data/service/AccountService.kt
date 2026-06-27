@@ -365,25 +365,33 @@ class AccountService @Inject constructor(
     }
 
     fun createMemosV1Client(host: String, accessToken: String?): Pair<OkHttpClient, MemosV1Api> {
+        android.util.Log.e("MoeMemosHttp", "=== createMemosV1Client called === host=$host, token provided=${!accessToken.isNullOrBlank()}, token prefix=${accessToken?.take(15)}")
         val client = okHttpClient.newBuilder().apply {
             // Debug logging interceptor — logs request URL, Authorization header presence,
-            // response status, and response body (truncated). Remove for production.
+            // response status, and response body (truncated). Uses Log.e for guaranteed visibility.
             addInterceptor { chain ->
                 val request = chain.request()
-                android.util.Log.d("MoeMemosHttp", ">> ${request.method} ${request.url}")
-                android.util.Log.d("MoeMemosHttp", ">> Authorization header present: ${request.header("Authorization") != null}")
-                val authPreview = request.header("Authorization")?.take(20)
-                android.util.Log.d("MoeMemosHttp", ">> Authorization preview: $authPreview...")
-                val response = chain.proceed(request)
-                android.util.Log.d("MoeMemosHttp", "<< ${response.code} ${response.message} for ${request.url}")
-                val bodyString = response.peekBody(2048L).string()
-                android.util.Log.d("MoeMemosHttp", "<< Body preview: $bodyString")
+                android.util.Log.e("MoeMemosHttp", ">> ${request.method} ${request.url}")
+                android.util.Log.e("MoeMemosHttp", ">> Authorization header present: ${request.header("Authorization") != null}")
+                val authPreview = request.header("Authorization")?.take(25)
+                android.util.Log.e("MoeMemosHttp", ">> Authorization preview: $authPreview")
+                val response = try {
+                    chain.proceed(request)
+                } catch (e: Exception) {
+                    android.util.Log.e("MoeMemosHttp", "<< EXCEPTION for ${request.url}: ${e::class.java.simpleName}: ${e.message}")
+                    throw e
+                }
+                android.util.Log.e("MoeMemosHttp", "<< ${response.code} ${response.message} for ${request.url}")
+                val bodyString = try { response.peekBody(4096L).string() } catch (_: Exception) { "<unable to peek body>" }
+                android.util.Log.e("MoeMemosHttp", "<< Body preview: $bodyString")
                 response
             }
             if (!accessToken.isNullOrBlank()) {
                 addNetworkInterceptor { chain ->
                     var request = chain.request()
-                    if (shouldAttachAccessToken(request.url, host)) {
+                    val shouldAttach = shouldAttachAccessToken(request.url, host)
+                    android.util.Log.e("MoeMemosHttp", ">> NetworkInterceptor: shouldAttach=$shouldAttach, requestHost=${request.url.host}, configHost=${host.toHttpUrlOrNull()?.host}")
+                    if (shouldAttach) {
                         request = request.newBuilder()
                             .addHeader("Authorization", "Bearer $accessToken")
                             .build()
@@ -508,18 +516,34 @@ class AccountService @Inject constructor(
     }
 
     private suspend fun detectAccountCaseAndVersion(host: String): ServerVersionInfo {
+        android.util.Log.e("MoeMemosHttp", "=== detectAccountCaseAndVersion START === host=$host")
+
+        // Try V0 status endpoint first
         val memosV0Status = createMemosV0Client(host, null).second.status().getOrNull()
+        android.util.Log.e("MoeMemosHttp", "V0 status result: ${if (memosV0Status != null) "got response" else "null"}")
         val memosV0Version = memosV0Status?.profile?.version?.trim().orEmpty()
+        android.util.Log.e("MoeMemosHttp", "V0 version detected: '$memosV0Version'")
         if (memosV0Version.isNotEmpty()) {
+            android.util.Log.e("MoeMemosHttp", "=== detectAccountCaseAndVersion: V0, version=$memosV0Version ===")
             return ServerVersionInfo(UserData.AccountCase.MEMOS_V0, memosV0Version)
         }
 
-        val memosV1Profile = createMemosV1Client(host, null).second.getProfile().getOrThrow()
+        // Try V1 profile endpoint
+        android.util.Log.e("MoeMemosHttp", "V0 failed, trying V1 getProfile()...")
+        val memosV1Profile = try {
+            createMemosV1Client(host, null).second.getProfile().getOrThrow()
+        } catch (e: Exception) {
+            android.util.Log.e("MoeMemosHttp", "V1 getProfile() THREW: ${e::class.java.simpleName}: ${e.message}")
+            throw e
+        }
+        android.util.Log.e("MoeMemosHttp", "V1 profile received: version='${memosV1Profile.version}'")
         val memosV1Version = memosV1Profile.version.trim()
         if (memosV1Version.isNotEmpty()) {
+            android.util.Log.e("MoeMemosHttp", "=== detectAccountCaseAndVersion: V1, version=$memosV1Version ===")
             return ServerVersionInfo(UserData.AccountCase.MEMOS_V1, memosV1Version)
         }
 
+        android.util.Log.e("MoeMemosHttp", "=== detectAccountCaseAndVersion: ACCOUNT_NOT_SET ===")
         return ServerVersionInfo(UserData.AccountCase.ACCOUNT_NOT_SET, "")
     }
 
