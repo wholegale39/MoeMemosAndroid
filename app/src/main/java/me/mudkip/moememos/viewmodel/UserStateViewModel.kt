@@ -90,36 +90,22 @@ class UserStateViewModel @Inject constructor(
         allowHigherV1Version: Boolean = false,
     ): ApiResponse<Unit> = withContext(viewModelScope.coroutineContext) {
         try {
-            android.util.Log.e("MoeMemosHttp", "=== LOGIN START === host=$host, tokenPrefix=${accessToken.take(15)}, allowHigherV1=$allowHigherV1Version")
             val compatibility = accountService.checkLoginCompatibility(host, allowHigherV1Version)
-            android.util.Log.e("MoeMemosHttp", "Compatibility check result: ${compatibility::class.java.simpleName}")
             val accountCase = when (compatibility) {
-                is AccountService.LoginCompatibility.Supported -> {
-                    android.util.Log.e("MoeMemosHttp", "Server supported, accountCase=${compatibility.accountCase}")
-                    compatibility.accountCase
-                }
+                is AccountService.LoginCompatibility.Supported -> compatibility.accountCase
                 is AccountService.LoginCompatibility.Unsupported -> {
-                    android.util.Log.e("MoeMemosHttp", "Server UNSUPPORTED: ${compatibility.message}")
                     return@withContext ApiResponse.exception(MoeMemosException(compatibility.message))
                 }
                 is AccountService.LoginCompatibility.RequiresConfirmation -> {
-                    android.util.Log.e("MoeMemosHttp", "Requires confirmation: ${compatibility.message}")
                     return@withContext ApiResponse.exception(MoeMemosException(compatibility.message))
                 }
             }
             when (accountCase) {
-                UserData.AccountCase.MEMOS_V1 -> {
-                    android.util.Log.e("MoeMemosHttp", "Proceeding with V1 login...")
-                    loginMemosV1WithAccessToken(host, accessToken, accountLabel)
-                }
-                UserData.AccountCase.MEMOS_V0 -> {
-                    android.util.Log.e("MoeMemosHttp", "Proceeding with V0 login...")
-                    loginMemosV0WithAccessToken(host, accessToken, accountLabel)
-                }
+                UserData.AccountCase.MEMOS_V1 -> loginMemosV1WithAccessToken(host, accessToken, accountLabel)
+                UserData.AccountCase.MEMOS_V0 -> loginMemosV0WithAccessToken(host, accessToken, accountLabel)
                 else -> throw MoeMemosException.invalidServer
             }
         } catch (e: Throwable) {
-            android.util.Log.e("MoeMemosHttp", "=== LOGIN EXCEPTION === ${e::class.java.simpleName}: ${e.message}")
             ApiResponse.exception(e)
         }
     }
@@ -148,11 +134,8 @@ class UserStateViewModel @Inject constructor(
         accountLabel: String,
     ): ApiResponse<Unit> = withContext(viewModelScope.coroutineContext) {
         try {
-            android.util.Log.e("MoeMemosHttp", "=== loginMemosV1WithAccessToken START === calling getCurrentUser()...")
             val resp = accountService.createMemosV1Client(host, accessToken).second.getCurrentUser()
-            android.util.Log.e("MoeMemosHttp", "getCurrentUser response type: ${resp::class.java.simpleName}")
             if (resp !is ApiResponse.Success) {
-                android.util.Log.e("MoeMemosHttp", "getCurrentUser NOT SUCCESS: $resp")
                 return@withContext resp.mapSuccess {}
             }
             val user = resp.data.user
