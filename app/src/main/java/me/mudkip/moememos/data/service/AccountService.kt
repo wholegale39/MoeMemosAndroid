@@ -365,16 +365,43 @@ class AccountService @Inject constructor(
     }
 
     fun createMemosV1Client(host: String, accessToken: String?): Pair<OkHttpClient, MemosV1Api> {
-        android.util.Log.e("MoeMemosHttp", "=== createMemosV1Client called === host=$host, token provided=${!accessToken.isNullOrBlank()}, token prefix=${accessToken?.take(15)}")
+        android.util.Log.e("MoeMemosHttp", "=== createMemosV1Client called === host=$host, token provided=${!accessToken.isNullOrBlank()}, token length=${accessToken?.length}")
+        if (!accessToken.isNullOrEmpty()) {
+            android.util.Log.e("MoeMemosHttp", "=== TOKEN DIAGNOSTICS ===")
+            android.util.Log.e("MoeMemosHttp", "  prefix(15): ${accessToken.take(15)}")
+            android.util.Log.e("MoeMemosHttp", "  suffix(10): ${accessToken.takeLast(10)}")
+            android.util.Log.e("MoeMemosHttp", "  startsWith(memos_pat_): ${accessToken.startsWith("memos_pat_")}")
+            android.util.Log.e("MoeMemosHttp", "  hasLeadingWhitespace: ${accessToken != accessToken.trimStart()}")
+            android.util.Log.e("MoeMemosHttp", "  hasTrailingWhitespace: ${accessToken != accessToken.trimEnd()}")
+            android.util.Log.e("MoeMemosHttp", "  trimmedLength: ${accessToken.trim().length}")
+            android.util.Log.e("MoeMemosHttp", "  containsNewline: ${accessToken.contains('\n') || accessToken.contains('\r')}")
+            // Log full token for debugging (TEMPORARY - remove before release)
+            android.util.Log.e("MoeMemosHttp", "  FULL TOKEN: [$accessToken]")
+        }
+        val effectiveToken = accessToken?.trim()
         val client = okHttpClient.newBuilder().apply {
-            // Debug logging interceptor — logs request URL, Authorization header presence,
-            // response status, and response body (truncated). Uses Log.e for guaranteed visibility.
+            // Single application interceptor: adds token + logs everything.
             addInterceptor { chain ->
-                val request = chain.request()
+                var request = chain.request()
+
+                // Attach access token as an application interceptor (not network interceptor)
+                if (!effectiveToken.isNullOrBlank()) {
+                    val shouldAttach = shouldAttachAccessToken(request.url, host)
+                    if (shouldAttach) {
+                        request = request.newBuilder()
+                            .header("Authorization", "Bearer $effectiveToken")
+                            .build()
+                    }
+                    android.util.Log.e("MoeMemosHttp", ">> Token attach: shouldAttach=$shouldAttach, requestHost=${request.url.host}, configHost=${host.toHttpUrlOrNull()?.host}")
+                }
+
+                // Log request WITH auth header (after potential token attachment)
                 android.util.Log.e("MoeMemosHttp", ">> ${request.method} ${request.url}")
-                android.util.Log.e("MoeMemosHttp", ">> Authorization header present: ${request.header("Authorization") != null}")
-                val authPreview = request.header("Authorization")?.take(25)
-                android.util.Log.e("MoeMemosHttp", ">> Authorization preview: $authPreview")
+                val authHeader = request.header("Authorization")
+                android.util.Log.e("MoeMemosHttp", ">> Authorization header: $authHeader")
+                android.util.Log.e("MoeMemosHttp", ">> Authorization header length: ${authHeader?.length}")
+                android.util.Log.e("MoeMemosHttp", ">> All request headers: ${request.headers}")
+
                 val response = try {
                     chain.proceed(request)
                 } catch (e: Exception) {
@@ -382,22 +409,11 @@ class AccountService @Inject constructor(
                     throw e
                 }
                 android.util.Log.e("MoeMemosHttp", "<< ${response.code} ${response.message} for ${request.url}")
+                android.util.Log.e("MoeMemosHttp", "<< Response headers: ${response.headers}")
                 val bodyString = try { response.peekBody(4096L).string() } catch (_: Exception) { "<unable to peek body>" }
                 android.util.Log.e("MoeMemosHttp", "<< Body preview: $bodyString")
+
                 response
-            }
-            if (!accessToken.isNullOrBlank()) {
-                addNetworkInterceptor { chain ->
-                    var request = chain.request()
-                    val shouldAttach = shouldAttachAccessToken(request.url, host)
-                    android.util.Log.e("MoeMemosHttp", ">> NetworkInterceptor: shouldAttach=$shouldAttach, requestHost=${request.url.host}, configHost=${host.toHttpUrlOrNull()?.host}")
-                    if (shouldAttach) {
-                        request = request.newBuilder()
-                            .addHeader("Authorization", "Bearer $accessToken")
-                            .build()
-                    }
-                    chain.proceed(request)
-                }
             }
         }.build()
 
