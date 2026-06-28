@@ -88,14 +88,12 @@ fun LoginPage(
         mutableStateOf(TextFieldValue())
     }
 
-    var loginCompatibilityWarning by remember { mutableStateOf<String?>(null) }
-
     fun normalizedHost(): String {
         val trimmed = host.text.trim()
         return if (trimmed.contains("//")) trimmed else "https://$trimmed"
     }
 
-    fun login(allowHigherV1Version: Boolean = false) = coroutineScope.launch {
+    fun login() = coroutineScope.launch {
         if (host.text.isBlank() || accessToken.text.isBlank()) {
             snackbarState.showSnackbar(R.string.fill_login_form.string)
             return@launch
@@ -104,17 +102,11 @@ fun LoginPage(
         val sanitizedHost = normalizedHost()
         host = TextFieldValue(sanitizedHost)
 
-        if (!allowHigherV1Version) {
-            when (val compatibility = userStateViewModel.checkLoginCompatibility(sanitizedHost)) {
-                LoginCompatibility.Supported -> Unit
-                is LoginCompatibility.Unsupported -> {
-                    snackbarState.showSnackbar(compatibility.message)
-                    return@launch
-                }
-                is LoginCompatibility.RequiresConfirmation -> {
-                    loginCompatibilityWarning = compatibility.message
-                    return@launch
-                }
+        when (val compatibility = userStateViewModel.checkLoginCompatibility(sanitizedHost)) {
+            LoginCompatibility.Supported -> Unit
+            is LoginCompatibility.Unsupported -> {
+                snackbarState.showSnackbar(compatibility.message)
+                return@launch
             }
         }
 
@@ -122,7 +114,6 @@ fun LoginPage(
             host = sanitizedHost,
             accessToken = accessToken.text.trim(),
             accountLabel = accountLabel.text,
-            allowHigherV1Version = allowHigherV1Version,
         )
         resp.suspendOnSuccess {
             navController.navigate(RouteName.MEMOS) {
@@ -135,29 +126,6 @@ fun LoginPage(
         .suspendOnErrorMessage {
             snackbarState.showSnackbar(it)
         }
-    }
-
-    if (loginCompatibilityWarning != null) {
-        AlertDialog(
-            onDismissRequest = { loginCompatibilityWarning = null },
-            title = { Text(text = R.string.unsupported_memos_version_title.string) },
-            text = { Text(text = loginCompatibilityWarning ?: "") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        loginCompatibilityWarning = null
-                        login(allowHigherV1Version = true)
-                    }
-                ) {
-                    Text(R.string.still_login.string)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { loginCompatibilityWarning = null }) {
-                    Text(R.string.cancel.string)
-                }
-            }
-        )
     }
 
     Scaffold(
