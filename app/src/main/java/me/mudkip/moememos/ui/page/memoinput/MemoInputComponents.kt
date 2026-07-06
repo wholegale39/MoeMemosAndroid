@@ -47,7 +47,10 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draganddrop.DragAndDropEvent
@@ -256,7 +259,7 @@ internal fun MemoInputBottomBar(
 
                 // AI assist dropdown
                 if (aiAssistEnabled) {
-                    var aiMenuExpanded by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+                    var aiMenuExpanded by remember { mutableStateOf(false) }
                     Box {
                         DropdownMenu(
                             expanded = aiMenuExpanded,
