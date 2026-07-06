@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Edit
@@ -19,6 +20,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -72,6 +74,7 @@ fun SettingsPage(
         AppLockAuthenticator.canAuthenticate(context)
     }
     var showEditGestureDialog by remember { mutableStateOf(false) }
+    var showAiSettingsDialog by remember { mutableStateOf(false) }
 
     fun setAppLockEnabled(enabled: Boolean) {
         if (enabled && !appLockSupported) {
@@ -206,6 +209,16 @@ fun SettingsPage(
             }
 
             item {
+                SettingItem(
+                    icon = Icons.Outlined.AutoAwesome,
+                    text = R.string.ai_settings.string,
+                    subtitle = R.string.ai_settings_summary.string,
+                ) {
+                    showAiSettingsDialog = true
+                }
+            }
+
+            item {
                 Text(
                     R.string.security.string,
                     modifier = Modifier
@@ -326,6 +339,73 @@ fun SettingsPage(
             }
         )
     }
+
+    if (showAiSettingsDialog) {
+        AiSettingsDialog(
+            onDismiss = { showAiSettingsDialog = false },
+        )
+    }
+}
+
+@Composable
+private fun AiSettingsDialog(
+    onDismiss: () -> Unit,
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val storage = remember { me.mudkip.moememos.data.service.AiSettingsStorage(context) }
+    val current by storage.settings.collectAsState(initial = me.mudkip.moememos.data.service.AiSettings("", "", me.mudkip.moememos.data.service.AiSettingsStorage.DEFAULT_MODEL))
+    var endpoint by remember(current) { mutableStateOf(current.endpoint) }
+    var apiKey by remember(current) { mutableStateOf(current.apiKey) }
+    var model by remember(current) { mutableStateOf(current.model) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(R.string.ai_settings.string) },
+        text = {
+            androidx.compose.foundation.layout.Column {
+                Text(
+                    R.string.ai_settings_summary.string,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 12.dp),
+                )
+                OutlinedTextField(
+                    value = endpoint,
+                    onValueChange = { endpoint = it },
+                    label = { Text(R.string.ai_settings_api_endpoint.string) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                )
+                OutlinedTextField(
+                    value = apiKey,
+                    onValueChange = { apiKey = it },
+                    label = { Text(R.string.ai_settings_api_key.string) },
+                    singleLine = true,
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                )
+                OutlinedTextField(
+                    value = model,
+                    onValueChange = { model = it },
+                    label = { Text(R.string.ai_settings_model.string) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                scope.launch {
+                    storage.update(endpoint, apiKey, model)
+                    onDismiss()
+                }
+            }) { Text(R.string.confirm.string) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(R.string.cancel.string) }
+        }
+    )
 }
 
 private val MemoEditGesture.titleResource: Int

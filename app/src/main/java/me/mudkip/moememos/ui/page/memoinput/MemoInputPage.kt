@@ -1,9 +1,12 @@
 package me.mudkip.moememos.ui.page.memoinput
 
 import android.content.ActivityNotFoundException
+import android.content.Intent
 import android.net.Uri
+import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.contract.ActivityResultContracts.OpenDocument
 import androidx.activity.result.contract.ActivityResultContracts.TakePicture
 import androidx.compose.foundation.layout.imePadding
@@ -23,6 +26,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -32,12 +36,18 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import me.mudkip.moememos.MoeMemosFileProvider
+import me.mudkip.moememos.R
 import me.mudkip.moememos.data.model.MemoVisibility
 import me.mudkip.moememos.data.model.ShareContent
+import me.mudkip.moememos.data.service.AiSettings
+import me.mudkip.moememos.data.service.AiSettingsStorage
+import me.mudkip.moememos.data.service.LlmService
 import me.mudkip.moememos.ext.popBackStackIfLifecycleIsResumed
+import me.mudkip.moememos.ext.string
 import me.mudkip.moememos.ext.suspendOnErrorMessage
 import me.mudkip.moememos.ui.page.common.LocalRootNavController
 import me.mudkip.moememos.ui.util.PickMultipleImagesContract
+import me.mudkip.moememos.ui.util.SpeechRecognizerController
 import me.mudkip.moememos.util.extractCustomTags
 import me.mudkip.moememos.viewmodel.LocalMemos
 import me.mudkip.moememos.viewmodel.LocalUserState
@@ -59,6 +69,7 @@ fun MemoInputPage(
     val memosViewModel = LocalMemos.current
     val userStateViewModel = LocalUserState.current
     val currentAccount by userStateViewModel.currentAccount.collectAsState()
+    val context = LocalContext.current
     val memo = remember { memosViewModel.memos.toList().find { it.identifier == memoIdentifier } }
     var initialContent by remember { mutableStateOf(memo?.content ?: "") }
     var text by rememberSaveable(stateSaver = TextFieldValue.Saver) {
@@ -74,6 +85,94 @@ fun MemoInputPage(
 
     val validMimeTypePrefixes = remember {
         setOf("text/")
+    }
+
+    // --- Voice input ---
+    val speechController = remember { SpeechRecognizerController(context) }
+    val speechState by speechController.state.collectAsState()
+    val partialTranscript by speechController.partialResults.collectAsState()
+    var voiceInputActive by remember { mutableStateOf(false) }
+
+    // --- AI assist ---
+    val aiSettingsStorage = remember { AiSettingsStorage(context) }
+    val aiSettings by aiSettingsStorage.settings.collectAsState(initial = AiSettings("", "", AiSettingsStorage.DEFAULT_MODEL))
+    var aiLoading by remember { mutableStateOf(false) }
+    val llmService = remember { LlmService() }
+
+    // Clean up speech recognizer on dispose.
+    DisposableEffect(speechController) {
+        onDispose { speechController.destroy() }
+    }
+
+    // Watch for final speech result and insert into editor.
+    LaunchedEffect(speechController) {
+        speechController.finalResult.collect { result ->
+            if (result != null) {
+                val consumed = speechController.consumeFinalResult()
+                if (!consumed.isNullOrEmpty()) {
+                    val newText = if (text.text.isEmpty()) consumed else "${text.text} $consumed"
+                    text = TextFieldValue(newText, TextRange(newText.length))
+                }
+                voiceInputActive = false
+            }
+        }
+    }
+
+    // RECORD_AUDIO permission launcher for voice input.
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            if (speechController.isAvailable) {
+                speechController.startListening()
+                voiceInputActive = true
+            } else {
+                coroutineScope.launch {
+                    snackbarState.showSnackbar(R.string.voice_input_unavailable.string)
+                }
+            }
+        } else {
+            coroutineScope.launch {
+                snackbarState.showSnackbar(R.string.voice_input_permission_required.string)
+            }
+        }
+    }
+
+    fun toggleVoiceInput() {
+        if (voiceInputActive) {
+            speechController.stopListening()
+            voiceInputActive = false
+        } else {
+            micPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    fun runAiAssist(action: AiAssistAction) {
+        if (text.text.isBlank()) {
+            coroutineScope.launch { snackbarState.showSnackbar(R.string.ai_assist_no_text.string) }
+            return
+        }
+        coroutineScope.launch {
+            aiLoading = true
+            try {
+                val prompt = when (action) {
+                    AiAssistAction.POLISH ->
+                        "You are a writing assistant. Refine the user's text for clarity, grammar, and flow. Keep the original meaning and language. Output only the polished text, no explanations."
+                    AiAssistAction.SUMMARIZE ->
+                        "You are a writing assistant. Summarize the user's text concisely in the same language. Output only the summary, no explanations."
+                    AiAssistAction.EXPAND ->
+                        "You are a writing assistant. Expand the user's text with relevant details and richer expression, keeping the same language and tone. Output only the expanded text, no explanations."
+                    AiAssistAction.TRANSLATE ->
+                        "You are a professional translator. Translate the user's text into English. Output only the translation, no explanations."
+                }
+                val result = llmService.transform(aiSettings, prompt, text.text)
+                text = TextFieldValue(result, TextRange(result.length))
+            } catch (e: Exception) {
+                snackbarState.showSnackbar(R.string.ai_assist_error.string.format(e.message ?: ""))
+            } finally {
+                aiLoading = false
+            }
+        }
     }
 
     fun submit() = coroutineScope.launch {
@@ -154,7 +253,7 @@ fun MemoInputPage(
         topBar = {
             MemoInputTopBar(
                 isEditMode = memo != null,
-                canSubmit = text.text.isNotEmpty() || viewModel.uploadResources.isNotEmpty(),
+                canSubmit = (text.text.isNotEmpty() || viewModel.uploadResources.isNotEmpty()) && !aiLoading,
                 onClose = { handleExit() },
                 onSubmit = { submit() }
             )
@@ -197,7 +296,11 @@ fun MemoInputPage(
                 },
                 onFormat = { format ->
                     text = applyMarkdownFormatToText(text, format)
-                }
+                },
+                isListening = voiceInputActive,
+                onToggleVoiceInput = { toggleVoiceInput() },
+                onAiAssist = { action -> runAiAssist(action) },
+                aiAssistEnabled = aiSettings.isEnabled,
             )
         },
         snackbarHost = {
@@ -206,7 +309,13 @@ fun MemoInputPage(
     ) { innerPadding ->
         MemoInputEditor(
             modifier = Modifier.padding(innerPadding),
-            text = text,
+            text = if (voiceInputActive && partialTranscript.isNotEmpty()) {
+                // Show live transcript appended to current text while listening.
+                val live = if (text.text.isEmpty()) partialTranscript else "${text.text} $partialTranscript"
+                TextFieldValue(live, TextRange(live.length))
+            } else {
+                text
+            },
             onTextChange = { updated ->
                 if (
                     text.text != updated.text &&

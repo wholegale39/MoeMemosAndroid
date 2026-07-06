@@ -22,7 +22,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.outlined.FormatListBulleted
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Attachment
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CheckBox
 import androidx.compose.material.icons.outlined.FormatBold
@@ -142,6 +145,10 @@ internal fun MemoInputBottomBar(
     onPickAttachment: () -> Unit,
     onTakePhoto: () -> Unit,
     onFormat: (MarkdownFormat) -> Unit,
+    isListening: Boolean = false,
+    onToggleVoiceInput: () -> Unit = {},
+    onAiAssist: (AiAssistAction) -> Unit = {},
+    aiAssistEnabled: Boolean = false,
 ) {
     val scrollState = rememberScrollState()
 
@@ -237,12 +244,56 @@ internal fun MemoInputBottomBar(
                     Icon(Icons.Outlined.PhotoCamera, contentDescription = stringResource(R.string.take_photo))
                 }
 
+                // Voice input toggle
+                IconButton(onClick = onToggleVoiceInput) {
+                    Icon(
+                        if (isListening) Icons.Filled.Stop else Icons.Filled.Mic,
+                        contentDescription = stringResource(R.string.voice_input),
+                        tint = if (isListening) androidx.compose.material3.MaterialTheme.colorScheme.error
+                               else androidx.compose.material3.MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                // AI assist dropdown
+                if (aiAssistEnabled) {
+                    var aiMenuExpanded by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+                    Box {
+                        DropdownMenu(
+                            expanded = aiMenuExpanded,
+                            onDismissRequest = { aiMenuExpanded = false },
+                        ) {
+                            AiAssistAction.entries.forEach { action ->
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(action.titleRes)) },
+                                    onClick = {
+                                        aiMenuExpanded = false
+                                        onAiAssist(action)
+                                    },
+                                    leadingIcon = {
+                                        Icon(Icons.Outlined.AutoAwesome, contentDescription = null)
+                                    }
+                                )
+                            }
+                        }
+                        IconButton(onClick = { aiMenuExpanded = !aiMenuExpanded }) {
+                            Icon(Icons.Outlined.AutoAwesome, contentDescription = stringResource(R.string.ai_assist))
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.size(4.dp))
 
                 FormattingButtons(onFormat = onFormat)
             }
         }
     }
+}
+
+enum class AiAssistAction(val titleRes: Int) {
+    POLISH(R.string.ai_assist_polish),
+    SUMMARIZE(R.string.ai_assist_summarize),
+    EXPAND(R.string.ai_assist_expand),
+    TRANSLATE(R.string.ai_assist_translate),
 }
 
 @OptIn(ExperimentalFoundationApi::class)
