@@ -119,6 +119,7 @@ dependencies {
     implementation "androidx.datastore:datastore-preferences:$datastore"
     implementation "androidx.datastore:datastore-preferences-core:$datastore"
     implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.10.0"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutines_version"
     implementation "com.jakewharton.timber:timber:5.0.1"
     implementation "net.swiftzer.semver:semver:$semver_version"
 
