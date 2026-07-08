@@ -14,6 +14,7 @@ import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.HistoryEdu
 import androidx.compose.material3.DrawerState
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -183,6 +184,23 @@ fun SideDrawer(
                 onClick = {
                     scope.launch {
                         memosNavController.navigate(RouteName.ARCHIVED) {
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                        drawerState?.close()
+                    }
+                },
+                modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+            )
+        }
+        item {
+            NavigationDrawerItem(
+                label = { Text(R.string.daily_review.string) },
+                icon = { Icon(Icons.Outlined.HistoryEdu, contentDescription = null) },
+                selected = isSelected(RouteName.DAILY_REVIEW),
+                onClick = {
+                    scope.launch {
+                        memosNavController.navigate(RouteName.DAILY_REVIEW) {
                             launchSingleTop = true
                             restoreState = true
                         }

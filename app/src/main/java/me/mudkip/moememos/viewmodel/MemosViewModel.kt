@@ -36,8 +36,10 @@ import me.mudkip.moememos.data.service.MemoService
 import me.mudkip.moememos.ext.getErrorMessage
 import me.mudkip.moememos.ext.string
 import me.mudkip.moememos.widget.WidgetUpdater
+import java.time.Instant
 import java.time.LocalDate
 import java.time.OffsetDateTime
+import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 
 @HiltViewModel
@@ -221,6 +223,18 @@ class MemosViewModel @Inject constructor(
         return DailyUsageStat.initialMatrix.map {
             it.copy(count = countMap[it.date] ?: 0)
         }
+    }
+
+    /**
+     * Returns up to [count] random memos created at least [daysAgo] days before now.
+     * Non-archived, non-deleted memos only. Results are shuffled on each call.
+     */
+    fun getDailyReviewMemos(daysAgo: Long = 30, count: Int = 5): List<MemoEntity> {
+        val cutoff = Instant.now().minus(daysAgo, ChronoUnit.DAYS)
+        return memos
+            .filter { !it.archived && it.date.isBefore(cutoff) }
+            .shuffled()
+            .take(count)
     }
 }
 

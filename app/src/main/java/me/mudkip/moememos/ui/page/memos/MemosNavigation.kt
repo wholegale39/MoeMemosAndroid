@@ -75,5 +75,12 @@ fun MemosNavigation(
         composable(RouteName.SEARCH) {
             SearchPage(navController = navController)
         }
+
+        composable(RouteName.DAILY_REVIEW) {
+            DailyReviewPage(
+                drawerState = drawerState,
+                navController = navController,
+            )
+        }
     }
 }

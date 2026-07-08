@@ -96,6 +96,10 @@
     <string name="memo_visibility_protected">Visible to local members</string>
     <string name="memo_visibility_private">Only visible to you</string>
     <string name="explore">Explore</string>
+    <string name="daily_review">Daily Review</string>
+    <string name="daily_review_subtitle">Look back at thoughts from %1$d days ago</string>
+    <string name="daily_review_empty">No memos from %1$d days ago yet. Keep recording!</string>
+    <string name="daily_review_shuffle">Shuffle</string>
     <string name="delete_this_tag">Delete this tag?</string>
     <string name="expand">Expand</string>
     <string name="collapse">Collapse</string>
