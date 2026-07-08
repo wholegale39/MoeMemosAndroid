@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   build-debug-apk:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     env:
       JAVA_TOOL_OPTIONS: "-Djava.awt.headless=true"
 
