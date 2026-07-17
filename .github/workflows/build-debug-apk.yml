@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   build-debug-apk:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout
@@ -28,13 +28,8 @@ jobs:
       - name: Set up Gradle cache
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Install X11/fontconfig libraries and xvfb
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y xvfb libxext6 libxrender1 libxtst6 libxi6 libfontconfig1 libfreetype6
-
       - name: Build debug APK
-        run: xvfb-run -a ./gradlew :app:assembleDebug --no-daemon
+        run: ./gradlew :app:assembleDebug --no-daemon
 
       - name: Prepare artifact name
         id: prepare
