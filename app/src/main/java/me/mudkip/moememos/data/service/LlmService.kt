@@ -9,8 +9,6 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.resume
-import kotlinx.coroutines.resumeWithException
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -116,14 +114,14 @@ class LlmService(
             cont.invokeOnCancellation { runCatching { call.cancel() } }
             call.enqueue(object : okhttp3.Callback {
                 override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {
-                    cont.resumeWithException(RuntimeException("Network error: ${e.message}", e))
+                    cont.resumeWith(Result.failure(RuntimeException("Network error: ${e.message}", e)))
                 }
 
                 override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
                     try {
                         if (!response.isSuccessful) {
                             val errBody = response.body?.string().orEmpty()
-                            cont.resumeWithException(RuntimeException("HTTP ${response.code}: ${errBody.take(300)}"))
+                            cont.resumeWith(Result.failure(RuntimeException("HTTP ${response.code}: ${errBody.take(300)}")))
                             return
                         }
                         val raw = response.body?.string().orEmpty()
@@ -135,12 +133,12 @@ class LlmService(
                             ?.trim()
                             .orEmpty()
                         if (parsed.isEmpty()) {
-                            cont.resumeWithException(RuntimeException("Empty AI response"))
+                            cont.resumeWith(Result.failure(RuntimeException("Empty AI response")))
                         } else {
-                            cont.resume(parsed)
+                            cont.resumeWith(Result.success(parsed))
                         }
                     } catch (e: Exception) {
-                        cont.resumeWithException(e)
+                        cont.resumeWith(Result.failure(e))
                     }
                 }
             })
