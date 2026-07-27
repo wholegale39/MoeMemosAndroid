@@ -121,14 +121,6 @@ fun MemoInputPage(
         }
     }
 
-    val micPermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) launchSpeech() else coroutineScope.launch {
-            snackbarState.showSnackbar(R.string.voice_input_permission_required.string)
-        }
-    }
-
     fun launchSpeech() {
         if (!SpeechRecognizer.isRecognitionAvailable(context)) {
             coroutineScope.launch {
@@ -150,6 +142,14 @@ fun MemoInputPage(
             coroutineScope.launch {
                 snackbarState.showSnackbar(R.string.voice_input_unavailable.string)
             }
+        }
+    }
+
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) launchSpeech() else coroutineScope.launch {
+            snackbarState.showSnackbar(R.string.voice_input_permission_required.string)
         }
     }
 
