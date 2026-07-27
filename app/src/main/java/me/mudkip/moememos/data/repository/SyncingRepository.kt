@@ -27,6 +27,7 @@ import me.mudkip.moememos.data.local.entity.MemoWithResources
 import me.mudkip.moememos.data.local.entity.ResourceEntity
 import me.mudkip.moememos.data.model.Account
 import me.mudkip.moememos.data.model.Memo
+import me.mudkip.moememos.data.model.MemoRelation
 import me.mudkip.moememos.data.model.MemoVisibility
 import me.mudkip.moememos.data.model.Resource
 import me.mudkip.moememos.data.model.SyncStatus
@@ -385,6 +386,36 @@ class SyncingRepository(
 
     override suspend fun getCurrentUser(): ApiResponse<User> {
         return ApiResponse.Success(currentUser)
+    }
+
+    override suspend fun getRelations(identifier: String): ApiResponse<List<MemoRelation>> {
+        return try {
+            val memo = memoDao.getMemoById(identifier, accountKey)
+                ?: return ApiResponse.Failure.Exception(Exception("Memo not found"))
+            val remoteId = memo.remoteId
+            if (remoteId.isNullOrBlank()) {
+                ApiResponse.Success(emptyList())
+            } else {
+                remoteRepository.getRelations(remoteId)
+            }
+        } catch (e: Exception) {
+            ApiResponse.Failure.Exception(e)
+        }
+    }
+
+    override suspend fun setRelations(identifier: String, relations: List<MemoRelation>): ApiResponse<Unit> {
+        return try {
+            val memo = memoDao.getMemoById(identifier, accountKey)
+                ?: return ApiResponse.Failure.Exception(Exception("Memo not found"))
+            val remoteId = memo.remoteId
+            if (remoteId.isNullOrBlank()) {
+                ApiResponse.Success(Unit)
+            } else {
+                remoteRepository.setRelations(remoteId, relations)
+            }
+        } catch (e: Exception) {
+            ApiResponse.Failure.Exception(e)
+        }
     }
 
     override suspend fun sync(): ApiResponse<Unit> {

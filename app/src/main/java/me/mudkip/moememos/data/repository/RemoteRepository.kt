@@ -2,6 +2,7 @@ package me.mudkip.moememos.data.repository
 
 import com.skydoves.sandwich.ApiResponse
 import me.mudkip.moememos.data.model.Memo
+import me.mudkip.moememos.data.model.MemoRelation
 import me.mudkip.moememos.data.model.MemoVisibility
 import me.mudkip.moememos.data.model.Resource
 import me.mudkip.moememos.data.model.User
@@ -46,4 +47,7 @@ abstract class RemoteRepository {
 
     abstract suspend fun deleteResource(remoteId: String): ApiResponse<Unit>
     abstract suspend fun getCurrentUser(): ApiResponse<User>
+
+    abstract suspend fun getRelations(remoteId: String): ApiResponse<List<MemoRelation>>
+    abstract suspend fun setRelations(remoteId: String, relations: List<MemoRelation>): ApiResponse<Unit>
 }

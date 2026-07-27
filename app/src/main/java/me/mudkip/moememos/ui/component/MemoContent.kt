@@ -2,6 +2,7 @@ package me.mudkip.moememos.ui.component
 
 import android.content.Intent
 
+import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,6 +28,7 @@ import me.mudkip.moememos.ext.string
 import me.mudkip.moememos.ui.page.common.LocalRootNavController
 import me.mudkip.moememos.ui.page.common.RouteName
 import me.mudkip.moememos.ui.media.MediaViewerActivity
+import me.mudkip.moememos.viewmodel.LocalMemos
 import me.mudkip.moememos.viewmodel.LocalUserState
 import org.intellij.markdown.IElementType
 import org.intellij.markdown.MarkdownElementTypes
@@ -45,7 +47,8 @@ fun MemoContent(
     checkboxChange: (checked: Boolean, startOffset: Int, endOffset: Int) -> Unit = { _, _, _ -> },
     onViewMore: (() -> Unit)? = null,
     selectable: Boolean = false,
-    onTagClick: ((String) -> Unit)? = null
+    onTagClick: ((String) -> Unit)? = null,
+    onMemoLinkClick: ((target: String) -> Unit)? = null
 ) {
     val rootNavController = LocalRootNavController.current
     val (text, previewed) = remember(memo.content, previewMode) {
@@ -64,6 +67,23 @@ fun MemoContent(
         }
     }
 
+    val memosViewModel = LocalMemos.current
+    val handleMemoLinkClick = remember(rootNavController, onMemoLinkClick, memosViewModel) {
+        onMemoLinkClick ?: { target ->
+            val targetMemo = memosViewModel.memos.firstOrNull { memo ->
+                memo.remoteId == target ||
+                    memo.remoteId == "memos/$target" ||
+                    memo.remoteId?.endsWith("/$target") == true ||
+                    memo.remoteId?.substringAfterLast('/') == target
+            }
+            if (targetMemo != null) {
+                rootNavController.navigate("${RouteName.MEMO_DETAIL}?memoId=${Uri.encode(targetMemo.identifier)}") {
+                    launchSingleTop = true
+                }
+            }
+        }
+    }
+
     Column(
         modifier = Modifier.padding(start = 15.dp, end = 15.dp, bottom = 10.dp)
     ) {
@@ -72,7 +92,8 @@ fun MemoContent(
             imageBaseUrl = LocalUserState.current.host,
             checkboxChange = checkboxChange,
             selectable = selectable,
-            onTagClick = handleTagClick
+            onTagClick = handleTagClick,
+            onMemoLinkClick = handleMemoLinkClick
         )
 
         MemoResourceContent(memo)

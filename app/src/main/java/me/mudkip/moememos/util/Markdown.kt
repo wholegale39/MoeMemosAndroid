@@ -70,6 +70,44 @@ fun extractCustomTags(markdownText: String): Set<String> {
     return tags
 }
 
+/**
+ * Matches memo-reference links written as [[target]], where [target] is a memo
+ * resource name (e.g. "memos/123") or any bare id / snippet used to look the
+ * memo up. Mirrors the custom-tag matching used for #tags.
+ */
+private val memoLinkPattern = Regex("\\[\\[([^\\]\\n]+)\\]\\]")
+
+internal fun findMemoLinkMatches(text: String): Sequence<MatchResult> {
+    return memoLinkPattern.findAll(text)
+}
+
+internal fun getMemoLinkTarget(matchResult: MatchResult): String {
+    return matchResult.groupValues[1].trim()
+}
+
+internal fun isMemoLinkSupportedNode(node: ASTNode): Boolean {
+    return !hasAncestorOfType(node, customTagExcludedTypes)
+}
+
+/**
+ * Extracts the list of [[target]] link targets contained in [markdownText],
+ * skipping any that appear inside code spans/blocks, links, etc.
+ */
+fun extractMemoLinks(markdownText: String): List<String> {
+    val parsedTree = MarkdownParser(GFMFlavourDescriptor()).parse(MarkdownElementTypes.MARKDOWN_FILE, markdownText)
+    val targets = LinkedHashSet<String>()
+
+    findMemoLinkMatches(markdownText).forEach { result ->
+        val startPosition = result.range.first
+        val node = parsedTree.findNodeAtPosition(startPosition)
+        if (node != null && isMemoLinkSupportedNode(node)) {
+            targets.add(getMemoLinkTarget(result))
+        }
+    }
+
+    return targets.toList()
+}
+
 fun ASTNode.findNodeAtPosition(position: Int): ASTNode? {
     if (position in startOffset until endOffset) {
         for (child in children) {

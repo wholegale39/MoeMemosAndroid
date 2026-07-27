@@ -39,8 +39,11 @@ import com.mikepenz.markdown.model.markdownAnnotatorConfig
 import com.mikepenz.markdown.model.rememberMarkdownState
 import com.mikepenz.markdown.utils.getUnescapedTextInNode
 import me.mudkip.moememos.util.findCustomTagMatches
+import me.mudkip.moememos.util.findMemoLinkMatches
 import me.mudkip.moememos.util.getCustomTagName
+import me.mudkip.moememos.util.getMemoLinkTarget
 import me.mudkip.moememos.util.isCustomTagSupportedNode
+import kotlin.text.MatchResult
 import org.intellij.markdown.MarkdownTokenTypes
 import com.mikepenz.markdown.m3.Markdown as M3Markdown
 
@@ -53,6 +56,7 @@ fun Markdown(
     checkboxChange: ((checked: Boolean, startOffset: Int, endOffset: Int) -> Unit)? = null,
     selectable: Boolean = false,
     onTagClick: ((tag: String) -> Unit)? = null,
+    onMemoLinkClick: ((target: String) -> Unit)? = null,
 ) {
     fun withOptionalTextAlign(style: TextStyle): TextStyle {
         return if (textAlign == null) style else style.copy(textAlign = textAlign)
@@ -82,6 +86,28 @@ fun Markdown(
             uriHandler.openUri(url)
         }
     }
+    val memoLinkStyle = remember {
+        TextLinkStyles(
+            style = SpanStyle(
+                color = MaterialTheme.colorScheme.primary,
+                textDecoration = TextDecoration.Underline,
+            )
+        )
+    }
+    val memoLinkListener = remember(uriHandler, onMemoLinkClick) {
+        LinkInteractionListener { link ->
+            val url = (link as? LinkAnnotation.Url)?.url ?: return@LinkInteractionListener
+            if (url.startsWith(MEMO_LINK_PREFIX)) {
+                onMemoLinkClick?.invoke(Uri.decode(url.removePrefix(MEMO_LINK_PREFIX)))
+                return@LinkInteractionListener
+            }
+            if (url.startsWith(TAG_LINK_PREFIX)) {
+                onTagClick?.invoke(Uri.decode(url.removePrefix(TAG_LINK_PREFIX)))
+                return@LinkInteractionListener
+            }
+            uriHandler.openUri(url)
+        }
+    }
     val imageTransformer = remember(imageBaseUrl) {
         object : ImageTransformer {
             @Composable
@@ -98,6 +124,13 @@ fun Markdown(
     val markdownState = rememberMarkdownState(
         content = text,
         retainState = true
+    )
+
+    data class LinkSpan(
+        val start: Int,
+        val endInclusive: Int,
+        val kind: SpanKind,
+        val match: MatchResult
     )
 
     val markdownContent: @Composable () -> Unit = {
@@ -128,29 +161,49 @@ fun Markdown(
                         return@markdownAnnotator false
                     }
                     val source = child.getUnescapedTextInNode(content)
-                    val tags = findCustomTagMatches(source).toList()
-                    if (tags.isEmpty()) {
+                    val tagMatches = findCustomTagMatches(source).toList()
+                    val memoMatches = findMemoLinkMatches(source).toList()
+                    if (tagMatches.isEmpty() && memoMatches.isEmpty()) {
                         return@markdownAnnotator false
                     }
 
+                    val spans = buildList {
+                        tagMatches.forEach { add(LinkSpan(it.range.first, it.range.last, SpanKind.TAG, it)) }
+                        memoMatches.forEach { add(LinkSpan(it.range.first, it.range.last, SpanKind.MEMO, it)) }
+                    }.sortedBy { it.start }
+
                     var cursor = 0
-                    tags.forEach { match ->
-                        val start = match.range.first
-                        val endInclusive = match.range.last
-                        if (start > cursor) {
-                            append(source.substring(cursor, start))
+                    spans.forEach { span ->
+                        if (span.start > cursor) {
+                            append(source.substring(cursor, span.start))
                         }
-                        val tagRaw = getCustomTagName(match)
-                        withLink(
-                            LinkAnnotation.Url(
-                                url = TAG_LINK_PREFIX + Uri.encode(tagRaw),
-                                styles = tagLinkStyle,
-                                linkInteractionListener = tagLinkListener
-                            )
-                        ) {
-                            append(match.value)
+                        when (span.kind) {
+                            SpanKind.TAG -> {
+                                val tagRaw = getCustomTagName(span.match)
+                                withLink(
+                                    LinkAnnotation.Url(
+                                        url = TAG_LINK_PREFIX + Uri.encode(tagRaw),
+                                        styles = tagLinkStyle,
+                                        linkInteractionListener = tagLinkListener
+                                    )
+                                ) {
+                                    append(span.match.value)
+                                }
+                            }
+                            SpanKind.MEMO -> {
+                                val target = getMemoLinkTarget(span.match)
+                                withLink(
+                                    LinkAnnotation.Url(
+                                        url = MEMO_LINK_PREFIX + Uri.encode(target),
+                                        styles = memoLinkStyle,
+                                        linkInteractionListener = memoLinkListener
+                                    )
+                                ) {
+                                    append(span.match.value)
+                                }
+                            }
                         }
-                        cursor = endInclusive + 1
+                        cursor = span.endInclusive + 1
                     }
                     if (cursor < source.length) {
                         append(source.substring(cursor))
@@ -207,3 +260,6 @@ private fun resolveMarkdownImageLink(link: String, imageBaseUrl: String?): Strin
 }
 
 private const val TAG_LINK_PREFIX = "moememos://tag/"
+private const val MEMO_LINK_PREFIX = "moememos://memo/"
+
+private enum class SpanKind { TAG, MEMO }

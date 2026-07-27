@@ -29,12 +29,15 @@ import me.mudkip.moememos.data.constant.MoeMemosException
 import me.mudkip.moememos.data.local.entity.MemoEntity
 import me.mudkip.moememos.data.local.entity.ResourceEntity
 import me.mudkip.moememos.data.model.DailyUsageStat
+import me.mudkip.moememos.data.model.MemoRelation
 import me.mudkip.moememos.data.model.MemoVisibility
+import me.mudkip.moememos.data.model.RelationType
 import me.mudkip.moememos.data.model.SyncStatus
 import me.mudkip.moememos.data.service.AccountService
 import me.mudkip.moememos.data.service.MemoService
 import me.mudkip.moememos.ext.getErrorMessage
 import me.mudkip.moememos.ext.string
+import me.mudkip.moememos.util.extractMemoLinks
 import me.mudkip.moememos.widget.WidgetUpdater
 import java.time.Instant
 import java.time.LocalDate
@@ -235,6 +238,79 @@ class MemosViewModel @Inject constructor(
             .filter { !it.archived && it.date.isBefore(cutoff) }
             .shuffled()
             .take(count)
+    }
+
+    /**
+     * Resolves the [[target]] wikilinks embedded in [memo]'s content to locally
+     * known memos (outgoing references).
+     */
+    fun getOutgoingLinks(identifier: String): List<MemoEntity> {
+        val memo = memos.firstOrNull { it.identifier == identifier } ?: return emptyList()
+        return extractMemoLinks(memo.content)
+            .mapNotNull { target -> resolveMemoByTarget(target) }
+            .distinctBy { it.identifier }
+    }
+
+    /**
+     * Finds memos whose content contains a [[thisMemo]] link — i.e. memos that
+     * reference the given memo (incoming backlinks), computed client-side.
+     */
+    fun getBacklinks(identifier: String): List<MemoEntity> {
+        val memo = memos.firstOrNull { it.identifier == identifier } ?: return emptyList()
+        val selfId = memo.remoteId ?: return emptyList()
+        val selfName = selfId.substringAfterLast('/')
+        return memos.filter { other ->
+            other.identifier != identifier && !other.remoteId.isNullOrBlank() &&
+                extractMemoLinks(other.content).any { t -> targetMatches(t, selfId, selfName) }
+        }
+    }
+
+    private fun resolveMemoByTarget(target: String): MemoEntity? {
+        return memos.firstOrNull { m ->
+            !m.remoteId.isNullOrBlank() && targetMatches(target, m.remoteId, m.remoteId.substringAfterLast('/'))
+        }
+    }
+
+    private fun targetMatches(target: String, remoteId: String, name: String): Boolean {
+        return target == remoteId ||
+            target == "memos/$remoteId" ||
+            target.endsWith("/$remoteId") ||
+            target.substringAfterLast('/') == name
+    }
+
+    suspend fun getRelations(identifier: String): ApiResponse<List<MemoRelation>> = withContext(viewModelScope.coroutineContext) {
+        memoService.getRepository().getRelations(identifier)
+    }
+
+    /**
+     * Adds a relation from [identifier] to [targetIdentifier] by appending a
+     * [[targetRemoteId]] wikilink to the memo content (the portable, source-of-
+     * truth representation) and, best-effort, persisting it server-side via
+     * SetMemoRelations so it is reflected on other clients too.
+     */
+    suspend fun addRelation(identifier: String, targetIdentifier: String): Boolean = withContext(viewModelScope.coroutineContext) {
+        val memo = memos.firstOrNull { it.identifier == identifier } ?: return@withContext false
+        val target = memos.firstOrNull { it.identifier == targetIdentifier } ?: return@withContext false
+        val targetRemoteId = target.remoteId ?: return@withContext false
+
+        val alreadyLinked = extractMemoLinks(memo.content).any { t -> targetMatches(t, targetRemoteId, targetRemoteId.substringAfterLast('/')) }
+        if (!alreadyLinked) {
+            val newContent = if (memo.content.isBlank()) "[[$targetRemoteId]]" else "${memo.content}\n\n[[$targetRemoteId]]"
+            val editResp = editMemo(identifier, newContent, memo.resources, memo.visibility)
+            if (editResp !is ApiResponse.Success) {
+                return@withContext false
+            }
+        }
+
+        // Best-effort: also persist server-side relations (no-op on legacy servers).
+        val existing = when (val r = getRelations(identifier)) {
+            is ApiResponse.Success -> r.data
+            else -> emptyList()
+        }
+        val updated = (existing + MemoRelation(relatedMemoName = targetRemoteId, type = RelationType.REFERENCE))
+            .distinctBy { it.relatedMemoName }
+        memoService.getRepository().setRelations(identifier, updated)
+        true
     }
 }
 

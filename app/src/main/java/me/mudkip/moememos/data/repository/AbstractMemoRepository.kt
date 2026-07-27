@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import me.mudkip.moememos.data.local.entity.MemoEntity
 import me.mudkip.moememos.data.local.entity.ResourceEntity
+import me.mudkip.moememos.data.model.MemoRelation
 import me.mudkip.moememos.data.model.MemoVisibility
 import me.mudkip.moememos.data.model.SyncStatus
 import me.mudkip.moememos.data.model.User
@@ -33,6 +34,9 @@ abstract class AbstractMemoRepository {
     abstract suspend fun deleteResource(identifier: String): ApiResponse<Unit>
 
     abstract suspend fun getCurrentUser(): ApiResponse<User>
+
+    abstract suspend fun getRelations(identifier: String): ApiResponse<List<MemoRelation>>
+    abstract suspend fun setRelations(identifier: String, relations: List<MemoRelation>): ApiResponse<Unit>
 
     open fun observeMemos(): Flow<List<MemoEntity>> = emptyFlow()
 

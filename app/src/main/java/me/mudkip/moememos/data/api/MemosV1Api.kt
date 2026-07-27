@@ -56,7 +56,48 @@ interface MemosV1Api {
 
     @GET("api/v1/users/{id}:getStats")
     suspend fun getUserStats(@Path("id") userId: String): ApiResponse<MemosV1Stats>
+
+    @GET("api/v1/memos/{id}/relations")
+    suspend fun listMemoRelations(@Path("id") id: String): ApiResponse<ListMemoRelationsResponse>
+
+    @POST("api/v1/memos/{id}/relations")
+    suspend fun setMemoRelations(
+        @Path("id") id: String,
+        @Body body: SetMemoRelationsRequest
+    ): ApiResponse<ListMemoRelationsResponse>
 }
+
+@Serializable
+data class ListMemoRelationsResponse(
+    val relations: List<MemoRelationDto> = emptyList()
+)
+
+/**
+ * Defensive parser for the relation item returned by memos 0.30.
+ *
+ * The backend returns the related memo either as a full object under "memo"
+ * or (on some builds/versions) as a resource-name string under "relatedMemo".
+ * [relatedName] normalizes both shapes.
+ */
+@Serializable
+data class MemoRelationDto(
+    val memo: MemosV1Memo? = null,
+    val relatedMemo: String? = null,
+    @SerialName("type") val type: String? = null
+) {
+    fun relatedName(): String? = relatedMemo?.takeIf { it.isNotBlank() } ?: memo?.name?.takeIf { it.isNotBlank() }
+}
+
+@Serializable
+data class SetMemoRelationsRequest(
+    val relations: List<SetMemoRelationItem>
+)
+
+@Serializable
+data class SetMemoRelationItem(
+    val memo: String,
+    val type: String = "RELATION_TYPE_REFERENCE"
+)
 
 @Serializable
 data class MemosV1User(
@@ -131,7 +172,8 @@ data class MemosV1Memo(
     val visibility: MemosVisibility? = null,
     val pinned: Boolean? = null,
     val attachments: List<MemosV1Resource>? = null,
-    val tags: List<String>? = null
+    val tags: List<String>? = null,
+    val relations: List<MemoRelationDto>? = null
 )
 
 @Serializable

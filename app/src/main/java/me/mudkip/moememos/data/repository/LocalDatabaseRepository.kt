@@ -11,6 +11,7 @@ import me.mudkip.moememos.data.local.entity.MemoEntity
 import me.mudkip.moememos.data.local.entity.MemoWithResources
 import me.mudkip.moememos.data.local.entity.ResourceEntity
 import me.mudkip.moememos.data.model.Account
+import me.mudkip.moememos.data.model.MemoRelation
 import me.mudkip.moememos.data.model.MemoVisibility
 import me.mudkip.moememos.data.model.User
 import me.mudkip.moememos.util.extractCustomTags
@@ -256,6 +257,14 @@ class LocalDatabaseRepository(
 
     override suspend fun getCurrentUser(): ApiResponse<User> {
         return ApiResponse.Success(account.toUser())
+    }
+
+    override suspend fun getRelations(identifier: String): ApiResponse<List<MemoRelation>> {
+        return ApiResponse.Success(emptyList())
+    }
+
+    override suspend fun setRelations(identifier: String, relations: List<MemoRelation>): ApiResponse<Unit> {
+        return ApiResponse.Success(Unit)
     }
 
     private suspend fun withResources(memo: MemoEntity): MemoEntity {

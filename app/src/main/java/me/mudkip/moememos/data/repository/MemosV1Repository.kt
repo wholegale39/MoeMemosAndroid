@@ -12,11 +12,14 @@ import me.mudkip.moememos.data.api.MemosV1CreateMemoRequest
 import me.mudkip.moememos.data.api.MemosV1Memo
 import me.mudkip.moememos.data.api.MemosV1Resource
 import me.mudkip.moememos.data.api.MemosV1State
+import me.mudkip.moememos.data.api.SetMemoRelationItem
+import me.mudkip.moememos.data.api.SetMemoRelationsRequest
 import me.mudkip.moememos.data.api.MemosVisibility
 import me.mudkip.moememos.data.api.UpdateMemoRequest
 import me.mudkip.moememos.data.constant.MoeMemosException
 import me.mudkip.moememos.data.model.Account
 import me.mudkip.moememos.data.model.Memo
+import me.mudkip.moememos.data.model.MemoRelation
 import me.mudkip.moememos.data.model.MemoVisibility
 import me.mudkip.moememos.data.model.Resource
 import me.mudkip.moememos.data.model.User
@@ -51,7 +54,15 @@ class MemosV1Repository(
             resources = memo.attachments?.map { convertResource(it) } ?: emptyList(),
             tags = emptyList(),
             archived = memo.state == MemosV1State.ARCHIVED,
-            updatedAt = memo.updateTime
+            updatedAt = memo.updateTime,
+            relations = memo.relations?.mapNotNull { dto ->
+                val name = dto.relatedName() ?: return@mapNotNull null
+                MemoRelation(
+                    relatedMemoName = name,
+                    type = relationTypeFromString(dto.type),
+                    memo = dto.memo?.let { convertMemo(it) }
+                )
+            } ?: emptyList()
         )
     }
 
@@ -192,6 +203,28 @@ class MemosV1Repository(
         return memosApi.deleteResource(getId(remoteId))
     }
 
+    override suspend fun getRelations(remoteId: String): ApiResponse<List<MemoRelation>> {
+        return memosApi.listMemoRelations(getId(remoteId)).mapSuccess {
+            this.relations.mapNotNull { dto ->
+                val name = dto.relatedName() ?: return@mapNotNull null
+                MemoRelation(
+                    relatedMemoName = name,
+                    type = relationTypeFromString(dto.type),
+                    memo = dto.memo?.let { convertMemo(it) }
+                )
+            }
+        }
+    }
+
+    override suspend fun setRelations(remoteId: String, relations: List<MemoRelation>): ApiResponse<Unit> {
+        val body = SetMemoRelationsRequest(
+            relations = relations.map {
+                SetMemoRelationItem(memo = it.relatedMemoName, type = relationTypeToString(it.type))
+            }
+        )
+        return memosApi.setMemoRelations(getId(remoteId), body).mapSuccess { Unit }
+    }
+
     override suspend fun getCurrentUser(): ApiResponse<User> {
         val resp = memosApi.getCurrentUser().mapSuccess {
             if (user == null) {
@@ -221,5 +254,23 @@ class MemosV1Repository(
         }
         // getUserSetting failed — return user with default visibility instead of failing
         return ApiResponse.Success(resp.data)
+    }
+}
+
+private fun relationTypeFromString(value: String?): RelationType {
+    return when (value?.uppercase()) {
+        "RELATION_TYPE_REFERENCE", "REFERENCE" -> RelationType.REFERENCE
+        "RELATION_TYPE_COMMENT", "COMMENT" -> RelationType.COMMENT
+        "RELATION_TYPE_ATTACHMENT", "ATTACHMENT" -> RelationType.ATTACHMENT
+        else -> RelationType.UNSPECIFIED
+    }
+}
+
+private fun relationTypeToString(type: RelationType): String {
+    return when (type) {
+        RelationType.REFERENCE -> "RELATION_TYPE_REFERENCE"
+        RelationType.COMMENT -> "RELATION_TYPE_COMMENT"
+        RelationType.ATTACHMENT -> "RELATION_TYPE_ATTACHMENT"
+        RelationType.UNSPECIFIED -> "RELATION_TYPE_UNSPECIFIED"
     }
 }

@@ -14,6 +14,7 @@ import me.mudkip.moememos.data.api.MemosVisibility
 import me.mudkip.moememos.data.constant.MoeMemosException
 import me.mudkip.moememos.data.model.Account
 import me.mudkip.moememos.data.model.Memo
+import me.mudkip.moememos.data.model.MemoRelation
 import me.mudkip.moememos.data.model.MemoVisibility
 import me.mudkip.moememos.data.model.Resource
 import me.mudkip.moememos.data.model.User
@@ -182,5 +183,15 @@ class MemosV0Repository (
         return memosApi.me().mapSuccess {
             toUser()
         }
+    }
+
+    // memos v0 (legacy API) has no memo-relations endpoint — no-op so the
+    // relations UI degrades gracefully to content-derived [[ ]] links only.
+    override suspend fun getRelations(remoteId: String): ApiResponse<List<MemoRelation>> {
+        return ApiResponse.Success(emptyList())
+    }
+
+    override suspend fun setRelations(remoteId: String, relations: List<MemoRelation>): ApiResponse<Unit> {
+        return ApiResponse.Success(Unit)
     }
 }
