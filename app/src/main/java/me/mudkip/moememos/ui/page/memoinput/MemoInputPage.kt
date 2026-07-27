@@ -1,7 +1,11 @@
 package me.mudkip.moememos.ui.page.memoinput
 
+import android.app.Activity
 import android.content.ActivityNotFoundException
+import android.content.Intent
 import android.net.Uri
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -45,7 +49,6 @@ import me.mudkip.moememos.ext.string
 import me.mudkip.moememos.ext.suspendOnErrorMessage
 import me.mudkip.moememos.ui.page.common.LocalRootNavController
 import me.mudkip.moememos.ui.util.PickMultipleImagesContract
-import me.mudkip.moememos.ui.util.SpeechRecognizerController
 import me.mudkip.moememos.util.extractCustomTags
 import me.mudkip.moememos.viewmodel.LocalMemos
 import me.mudkip.moememos.viewmodel.LocalUserState
@@ -85,10 +88,7 @@ fun MemoInputPage(
         setOf("text/")
     }
 
-    // --- Voice input ---
-    val speechController = remember { SpeechRecognizerController(context) }
-    val speechState by speechController.state.collectAsState()
-    val partialTranscript by speechController.partialResults.collectAsState()
+    // --- Voice input (system speech recognition intent; reliable on API 33+) ---
     var voiceInputActive by remember { mutableStateOf(false) }
 
     // --- AI assist ---
@@ -97,52 +97,69 @@ fun MemoInputPage(
     var aiLoading by remember { mutableStateOf(false) }
     val llmService = remember { LlmService() }
 
-    // Clean up speech recognizer on dispose.
-    DisposableEffect(speechController) {
-        onDispose { speechController.destroy() }
-    }
-
-    // Watch for final speech result and insert into editor.
-    LaunchedEffect(speechController) {
-        speechController.finalResult.collect { result ->
-            if (result != null) {
-                val consumed = speechController.consumeFinalResult()
-                if (!consumed.isNullOrEmpty()) {
-                    val newText = if (text.text.isEmpty()) consumed else "${text.text} $consumed"
+    // Voice input via the system speech recognition dialog. The bound
+    // SpeechRecognizer API is deprecated/unreliable on API 33+ and frequently
+    // fails to invoke any callback; the activity-based RecognizerIntent is the
+    // stable path and works wherever a speech recognizer service exists.
+    val speechResultLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        voiceInputActive = false
+        when (result.resultCode) {
+            Activity.RESULT_OK -> {
+                val matches = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                val spoken = matches?.firstOrNull().orEmpty()
+                if (spoken.isNotEmpty()) {
+                    val newText = if (text.text.isEmpty()) spoken else "${text.text} $spoken"
                     text = TextFieldValue(newText, TextRange(newText.length))
                 }
-                voiceInputActive = false
+            }
+            Activity.RESULT_CANCELED -> Unit // user dismissed the dialog
+            else -> coroutineScope.launch {
+                snackbarState.showSnackbar(R.string.voice_input_no_speech.string)
             }
         }
     }
 
-    // RECORD_AUDIO permission launcher for voice input.
     val micPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
-        if (granted) {
-            if (speechController.isAvailable) {
-                speechController.startListening()
-                voiceInputActive = true
-            } else {
-                coroutineScope.launch {
-                    snackbarState.showSnackbar(R.string.voice_input_unavailable.string)
-                }
-            }
-        } else {
+        if (granted) launchSpeech() else coroutineScope.launch {
+            snackbarState.showSnackbar(R.string.voice_input_permission_required.string)
+        }
+    }
+
+    fun launchSpeech() {
+        if (!SpeechRecognizer.isRecognitionAvailable(context)) {
             coroutineScope.launch {
-                snackbarState.showSnackbar(R.string.voice_input_permission_required.string)
+                snackbarState.showSnackbar(R.string.voice_input_unavailable.string)
+            }
+            return
+        }
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, context.resources.configuration.locales[0].toLanguageTag())
+            putExtra(RecognizerIntent.EXTRA_PROMPT, context.getString(R.string.voice_input_prompt))
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+        }
+        try {
+            voiceInputActive = true
+            speechResultLauncher.launch(intent)
+        } catch (e: ActivityNotFoundException) {
+            voiceInputActive = false
+            coroutineScope.launch {
+                snackbarState.showSnackbar(R.string.voice_input_unavailable.string)
             }
         }
     }
 
     fun toggleVoiceInput() {
         if (voiceInputActive) {
-            speechController.stopListening()
+            // The system speech dialog manages its own lifecycle; just reset the flag.
             voiceInputActive = false
-        } else {
-            micPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+            return
         }
+        micPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
     }
 
     fun runAiAssist(action: AiAssistAction) {
@@ -307,13 +324,7 @@ fun MemoInputPage(
     ) { innerPadding ->
         MemoInputEditor(
             modifier = Modifier.padding(innerPadding),
-            text = if (voiceInputActive && partialTranscript.isNotEmpty()) {
-                // Show live transcript appended to current text while listening.
-                val live = if (text.text.isEmpty()) partialTranscript else "${text.text} $partialTranscript"
-                TextFieldValue(live, TextRange(live.length))
-            } else {
-                text
-            },
+            text = text,
             onTextChange = { updated ->
                 if (
                     text.text != updated.text &&

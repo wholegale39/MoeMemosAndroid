@@ -48,6 +48,8 @@
     <string name="voice_input_listening">Listening…</string>
     <string name="voice_input_unavailable">Speech recognition is not available on this device</string>
     <string name="voice_input_permission_required">Microphone permission is required for voice input</string>
+    <string name="voice_input_prompt">Speak now to add to your memo</string>
+    <string name="voice_input_no_speech">No speech recognized, please try again</string>
     <string name="ai_assist">AI Assist</string>
     <string name="ai_assist_polish">Polish</string>
     <string name="ai_assist_summarize">Summarize</string>
