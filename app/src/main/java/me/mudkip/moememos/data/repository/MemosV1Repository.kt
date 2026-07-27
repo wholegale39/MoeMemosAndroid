@@ -20,6 +20,7 @@ import me.mudkip.moememos.data.constant.MoeMemosException
 import me.mudkip.moememos.data.model.Account
 import me.mudkip.moememos.data.model.Memo
 import me.mudkip.moememos.data.model.MemoRelation
+import me.mudkip.moememos.data.model.RelationType
 import me.mudkip.moememos.data.model.MemoVisibility
 import me.mudkip.moememos.data.model.Resource
 import me.mudkip.moememos.data.model.User
