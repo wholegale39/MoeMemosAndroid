@@ -163,5 +163,4 @@
     <string name="backlinks">被引用</string>
     <string name="no_relations">暂无关联笔记，点击下方添加</string>
     <string name="add_relation">添加关联</string>
-    <string name="no_memos">暂无可关联的笔记</string>
 </resources>
