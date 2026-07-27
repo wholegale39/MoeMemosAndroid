@@ -63,6 +63,7 @@ import me.mudkip.moememos.ui.component.MemosCardActionButton
 import me.mudkip.moememos.ui.page.common.RouteName
 import me.mudkip.moememos.viewmodel.LocalMemos
 import me.mudkip.moememos.viewmodel.LocalUserState
+import me.mudkip.moememos.viewmodel.MemosViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -320,7 +321,7 @@ private fun AddRelationDialog(
     memosViewModel: MemosViewModel,
     currentMemoIdentifier: String,
     onDismiss: () -> Unit,
-    onAdded: (String) -> Unit
+    onAdded: suspend (String) -> Unit
 ) {
     val scope = rememberCoroutineScope()
     val candidates = remember(memosViewModel.memos) {

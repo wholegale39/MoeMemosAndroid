@@ -86,10 +86,11 @@ fun Markdown(
             uriHandler.openUri(url)
         }
     }
-    val memoLinkStyle = remember {
+    val memoLinkPrimary = MaterialTheme.colorScheme.primary
+    val memoLinkStyle = remember(memoLinkPrimary) {
         TextLinkStyles(
             style = SpanStyle(
-                color = MaterialTheme.colorScheme.primary,
+                color = memoLinkPrimary,
                 textDecoration = TextDecoration.Underline,
             )
         )
