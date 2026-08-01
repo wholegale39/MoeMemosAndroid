@@ -4,12 +4,14 @@ import android.net.Uri
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -50,6 +52,7 @@ fun MemosList(
     lazyListState: LazyListState = rememberLazyListState(),
     tag: String? = null,
     searchString: String? = null,
+    timeRangeStart: java.time.Instant? = null,
     additionalBottomPadding: Dp = 16.dp,
     onRefresh: (suspend () -> Unit)? = null,
     onTagClick: ((String) -> Unit)? = null,
@@ -68,7 +71,7 @@ fun MemosList(
     val scope = rememberCoroutineScope()
     var isRefreshing by remember { mutableStateOf(false) }
     var syncAlert by remember { mutableStateOf<PullRefreshSyncAlert?>(null) }
-    val filteredMemos = remember(viewModel.memos.toList(), tag, searchString) {
+    val filteredMemos = remember(viewModel.memos.toList(), tag, searchString, timeRangeStart) {
         val pinned = viewModel.memos.filter { it.pinned }
         val nonPinned = viewModel.memos.filter { !it.pinned }
         var fullList = pinned + nonPinned
@@ -77,6 +80,12 @@ fun MemosList(
             fullList = fullList.filter { memo ->
                 memo.content.contains("#$tag") ||
                         memo.content.contains("#$tag/")
+            }
+        }
+
+        timeRangeStart?.let { start ->
+            fullList = fullList.filter { memo ->
+                memo.date.isAfter(start)
             }
         }
 
@@ -129,19 +138,36 @@ fun MemosList(
             state = lazyListState,
             contentPadding = listContentPadding
         ) {
-            items(filteredMemos, key = { it.identifier }) { memo ->
-                MemosCard(
-                    memo = memo,
-                    onClick = { selectedMemo ->
-                        navController.navigate(
-                            "${RouteName.MEMO_DETAIL}?memoId=${Uri.encode(selectedMemo.identifier)}"
+            var lastDayHeader: String? = null
+            filteredMemos.forEach { memo ->
+                val dayHeader = dayGroupHeader(memo.date)
+                if (dayHeader != lastDayHeader) {
+                    lastDayHeader = dayHeader
+                    item(key = "day_$dayHeader") {
+                        Text(
+                            text = dayHeader,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.outline,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 8.dp)
                         )
-                    },
-                    editGesture = editGesture ?: MemoEditGesture.NONE,
-                    previewMode = true,
-                    showSyncStatus = currentAccount !is Account.Local,
-                    onTagClick = onTagClick
-                )
+                    }
+                }
+                item(key = memo.identifier) {
+                    MemosCard(
+                        memo = memo,
+                        onClick = { selectedMemo ->
+                            navController.navigate(
+                                "${RouteName.MEMO_DETAIL}?memoId=${Uri.encode(selectedMemo.identifier)}"
+                            )
+                        },
+                        editGesture = editGesture ?: MemoEditGesture.NONE,
+                        previewMode = true,
+                        showSyncStatus = currentAccount !is Account.Local,
+                        onTagClick = onTagClick
+                    )
+                }
             }
         }
     }
@@ -196,4 +222,19 @@ fun MemosList(
 private sealed class PullRefreshSyncAlert {
     data class Blocked(val message: String) : PullRefreshSyncAlert()
     data class Failed(val message: String) : PullRefreshSyncAlert()
+}
+
+/**
+ * Returns a flomo-style day group header (今天 / 昨天 / 日期) for [instant].
+ */
+private fun dayGroupHeader(instant: java.time.Instant): String {
+    val zone = java.time.ZoneId.systemDefault()
+    val date = instant.atZone(zone).toLocalDate()
+    val today = java.time.LocalDate.now()
+    val yesterday = today.minusDays(1)
+    return when (date) {
+        today -> me.mudkip.moememos.R.string.today.string
+        yesterday -> me.mudkip.moememos.R.string.yesterday.string
+        else -> date.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+    }
 }

@@ -15,4 +15,7 @@ data class UserSettings(
     val draft: String = "",
     val acceptedUnsupportedSyncVersions: List<String> = emptyList(),
     val editGesture: MemoEditGesture = MemoEditGesture.NONE,
+    val dailyReviewReminderEnabled: Boolean = false,
+    val dailyReviewReminderHour: Int = 21,
+    val dailyReviewReminderMinute: Int = 0,
 )

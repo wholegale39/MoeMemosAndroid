@@ -73,7 +73,6 @@ fun Markdown(
     val tagLinkStyle = TextLinkStyles(
         style = SpanStyle(
             color = MaterialTheme.colorScheme.primary,
-            textDecoration = TextDecoration.Underline,
         )
     )
     val tagLinkListener = remember(uriHandler, onTagClick) {

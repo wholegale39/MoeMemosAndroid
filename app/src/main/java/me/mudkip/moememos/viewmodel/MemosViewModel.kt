@@ -241,6 +241,14 @@ class MemosViewModel @Inject constructor(
     }
 
     /**
+     * Returns a single random non-archived memo (any age) for the flomo-style
+     * "random walk" feature, or null when there is nothing to wander through.
+     */
+    fun getRandomMemo(): MemoEntity? {
+        return memos.filter { !it.archived }.shuffled().firstOrNull()
+    }
+
+    /**
      * Resolves the [[target]] wikilinks embedded in [memo]'s content to locally
      * known memos (outgoing references).
      */

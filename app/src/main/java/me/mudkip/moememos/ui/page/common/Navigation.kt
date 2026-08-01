@@ -35,6 +35,10 @@ import me.mudkip.moememos.ui.page.memos.MemoDetailPage
 import me.mudkip.moememos.ui.page.memos.MemosPage
 import me.mudkip.moememos.ui.page.memos.SearchPage
 import me.mudkip.moememos.ui.page.memos.TagMemoPage
+import me.mudkip.moememos.ui.page.memos.DailyReviewPage
+import me.mudkip.moememos.ui.page.memos.StatsPage
+import me.mudkip.moememos.ui.page.memos.ArchiveBrowsePage
+import me.mudkip.moememos.ui.page.memos.MemoGraphPage
 import me.mudkip.moememos.ui.page.resource.ResourceListPage
 import me.mudkip.moememos.ui.page.settings.SettingsPage
 import me.mudkip.moememos.ui.theme.MoeMemosTheme
@@ -106,6 +110,22 @@ fun Navigation() {
                     SearchPage(navController = navController)
                 }
 
+                composable(RouteName.DAILY_REVIEW) {
+                    DailyReviewPage(navController = navController)
+                }
+
+                composable(RouteName.STATS) {
+                    StatsPage(navController = navController)
+                }
+
+                composable(RouteName.ARCHIVE_BROWSE) {
+                    ArchiveBrowsePage(navController = navController)
+                }
+
+                composable(RouteName.MEMO_GRAPH) {
+                    MemoGraphPage(navController = navController)
+                }
+
                 composable("${RouteName.TAG}/{tag}") { entry ->
                     val tag = entry.arguments?.getString("tag")?.let(Uri::decode) ?: ""
                     TagMemoPage(tag = tag, navController = navController)
@@ -162,6 +182,11 @@ fun Navigation() {
                 val memoId = intent.getStringExtra(MainActivity.EXTRA_MEMO_ID)
                 if (memoId != null) {
                     navController.navigate("${RouteName.MEMO_DETAIL}?memoId=${Uri.encode(memoId)}")
+                }
+            }
+            MainActivity.ACTION_VIEW_DAILY_REVIEW -> {
+                navController.navigate(RouteName.DAILY_REVIEW) {
+                    launchSingleTop = true
                 }
             }
         }

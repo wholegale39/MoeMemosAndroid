@@ -106,3 +106,11 @@ lint/tmp/
 
 # Serena (Claude Code MCP server)
 .serena/
+
+# Build leftovers (renamed old build dirs)
+.gradle.old.*/
+app/build.old.*/
+%SystemDrive%/
+
+# Local JDK archive
+jdk17.zip

@@ -16,4 +16,7 @@ object RouteName {
     const val EXPLORE = "explore"
     const val ACCOUNT = "account"
     const val DAILY_REVIEW = "daily-review"
+    const val STATS = "stats"
+    const val ARCHIVE_BROWSE = "archive-browse"
+    const val MEMO_GRAPH = "memo-graph"
 }

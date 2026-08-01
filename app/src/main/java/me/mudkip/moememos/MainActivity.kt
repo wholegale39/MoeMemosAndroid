@@ -26,6 +26,7 @@ class MainActivity : FragmentActivity() {
         const val ACTION_NEW_MEMO = "me.mudkip.moememos.action.NEW_MEMO"
         const val ACTION_EDIT_MEMO = "me.mudkip.moememos.action.EDIT_MEMO"
         const val ACTION_VIEW_MEMO = "me.mudkip.moememos.action.VIEW_MEMO"
+        const val ACTION_VIEW_DAILY_REVIEW = "me.mudkip.moememos.action.VIEW_DAILY_REVIEW"
         const val EXTRA_MEMO_ID = "memoId"
     }
 

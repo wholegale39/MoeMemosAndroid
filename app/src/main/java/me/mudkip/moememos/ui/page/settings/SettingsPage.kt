@@ -1,5 +1,9 @@
 package me.mudkip.moememos.ui.page.settings
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -11,6 +15,7 @@ import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material.icons.outlined.Source
 import androidx.compose.material.icons.outlined.Web
@@ -46,10 +51,13 @@ import me.mudkip.moememos.R
 import me.mudkip.moememos.data.model.Account
 import me.mudkip.moememos.data.model.MemoEditGesture
 import me.mudkip.moememos.data.model.Settings
+import me.mudkip.moememos.data.model.UserSettings
 import me.mudkip.moememos.data.model.displayTitle
 import me.mudkip.moememos.ext.popBackStackIfLifecycleIsResumed
 import me.mudkip.moememos.ext.settingsDataStore
 import me.mudkip.moememos.ext.string
+import me.mudkip.moememos.notification.DailyReviewNotifier
+import me.mudkip.moememos.notification.DailyReviewReminderScheduler
 import me.mudkip.moememos.ui.component.MemosIcon
 import me.mudkip.moememos.ui.page.common.RouteName
 import me.mudkip.moememos.ui.security.AppLockAuthenticator
@@ -75,6 +83,7 @@ fun SettingsPage(
     }
     var showEditGestureDialog by remember { mutableStateOf(false) }
     var showAiSettingsDialog by remember { mutableStateOf(false) }
+    var showDailyReviewTimeDialog by remember { mutableStateOf(false) }
 
     fun setAppLockEnabled(enabled: Boolean) {
         if (enabled && !appLockSupported) {
@@ -94,6 +103,49 @@ fun SettingsPage(
         ?.settings
         ?.editGesture
         ?: MemoEditGesture.NONE
+
+    val currentUserSettings = settings.usersList
+        .firstOrNull { it.accountKey == settings.currentUser }
+        ?.settings
+    val dailyReviewEnabled = currentUserSettings?.dailyReviewReminderEnabled ?: false
+    val dailyReviewHour = currentUserSettings?.dailyReviewReminderHour ?: 21
+    val dailyReviewMinute = currentUserSettings?.dailyReviewReminderMinute ?: 0
+
+    fun updateCurrentUserSettings(transform: (UserSettings) -> UserSettings) {
+        scope.launch(Dispatchers.IO) {
+            context.settingsDataStore.updateData { existingSettings ->
+                val userIndex = existingSettings.usersList.indexOfFirst { user ->
+                    user.accountKey == existingSettings.currentUser
+                }
+                if (userIndex == -1) {
+                    return@updateData existingSettings
+                }
+                val users = existingSettings.usersList.toMutableList()
+                users[userIndex] = users[userIndex].copy(
+                    settings = transform(users[userIndex].settings)
+                )
+                existingSettings.copy(usersList = users)
+            }
+        }
+    }
+
+    fun setDailyReviewReminderEnabled(enabled: Boolean) {
+        updateCurrentUserSettings { it.copy(dailyReviewReminderEnabled = enabled) }
+        if (enabled) {
+            DailyReviewNotifier.createChannel(context)
+            DailyReviewReminderScheduler.scheduleNext(context, dailyReviewHour, dailyReviewMinute)
+        } else {
+            DailyReviewReminderScheduler.cancel(context)
+        }
+    }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            setDailyReviewReminderEnabled(true)
+        }
+    }
 
     Scaffold(
         modifier = Modifier
@@ -205,6 +257,52 @@ fun SettingsPage(
                     }
                 ) {
                     showEditGestureDialog = true
+                }
+            }
+
+            item {
+                SettingItem(
+                    icon = Icons.Outlined.Notifications,
+                    text = R.string.daily_review_reminder.string,
+                    subtitle = R.string.daily_review_reminder_summary.string,
+                    trailingIcon = {
+                        Switch(
+                            checked = dailyReviewEnabled,
+                            onCheckedChange = null,
+                        )
+                    }
+                ) {
+                    if (dailyReviewEnabled) {
+                        setDailyReviewReminderEnabled(false)
+                    } else {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        } else {
+                            setDailyReviewReminderEnabled(true)
+                        }
+                    }
+                }
+            }
+
+            if (dailyReviewEnabled) {
+                item {
+                    SettingItem(
+                        icon = Icons.Outlined.Notifications,
+                        text = R.string.daily_review_reminder_time.string,
+                        trailingIcon = {
+                            Text(
+                                text = String.format(
+                                    java.util.Locale.getDefault(),
+                                    "%02d:%02d",
+                                    dailyReviewHour,
+                                    dailyReviewMinute
+                                ),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    ) {
+                        showDailyReviewTimeDialog = true
+                    }
                 }
             }
 
@@ -345,6 +443,71 @@ fun SettingsPage(
             onDismiss = { showAiSettingsDialog = false },
         )
     }
+
+    if (showDailyReviewTimeDialog) {
+        DailyReviewTimeDialog(
+            initialHour = dailyReviewHour,
+            initialMinute = dailyReviewMinute,
+            onDismiss = { showDailyReviewTimeDialog = false },
+            onConfirm = { hour, minute ->
+                updateCurrentUserSettings {
+                    it.copy(
+                        dailyReviewReminderHour = hour,
+                        dailyReviewReminderMinute = minute
+                    )
+                }
+                DailyReviewReminderScheduler.scheduleNext(context, hour, minute)
+                showDailyReviewTimeDialog = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun DailyReviewTimeDialog(
+    initialHour: Int,
+    initialMinute: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (Int, Int) -> Unit
+) {
+    val presets = listOf(
+        8 to 0,
+        12 to 0,
+        18 to 0,
+        20 to 0,
+        21 to 0,
+        22 to 0,
+        23 to 0
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(R.string.daily_review_reminder_time.string) },
+        text = {
+            LazyColumn {
+                presets.forEach { (hour, minute) ->
+                    item {
+                        TextButton(
+                            onClick = { onConfirm(hour, minute) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = String.format(java.util.Locale.getDefault(), "%02d:%02d", hour, minute),
+                                color = if (hour == initialHour && minute == initialMinute) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(R.string.cancel.string) }
+        }
+    )
 }
 
 @Composable

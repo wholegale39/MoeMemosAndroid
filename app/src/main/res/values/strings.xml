@@ -163,4 +163,53 @@
     <string name="backlinks">被引用</string>
     <string name="no_relations">暂无关联笔记，点击下方添加</string>
     <string name="add_relation">添加关联</string>
+
+    <!-- Daily review reminder (每日回顾提醒) -->
+    <string name="daily_review_reminder">每日回顾提醒</string>
+    <string name="daily_review_reminder_summary">每天定时推送一条 30 天前的记忆，点击通知直达回顾页</string>
+    <string name="daily_review_reminder_time">提醒时间</string>
+    <string name="daily_review_reminder_channel" translatable="false">每日回顾提醒</string>
+    <string name="daily_review_reminder_channel_description">定时推送 30 天前的记忆</string>
+    <string name="daily_review_notification_title">📮 每日回顾</string>
+    <string name="daily_review_notification_body">%1$d 条 30 天前的记忆等你回顾</string>
+    <string name="daily_review_notification_permission_required">需要通知权限才能开启每日回顾提醒</string>
+
+    <!-- Random walk (随机漫步) -->
+    <string name="random_walk">随机漫步</string>
+    <string name="random_walk_next">下一条</string>
+    <string name="random_walk_empty">还没有可漫步的记忆，先去记录吧！</string>
+
+    <!-- Stats page (统计页) -->
+    <string name="stats">我的统计</string>
+    <string name="stats_total">全部 MEMO</string>
+    <string name="stats_this_month">本月</string>
+    <string name="stats_this_week">本周</string>
+    <string name="stats_monthly_distribution">每月记录分布</string>
+    <string name="stats_tag_top">热门标签</string>
+    <string name="stats_days_used">使用天数</string>
+
+    <!-- Archive browse (按月归档) -->
+    <string name="archive_browse">按月归档</string>
+    <string name="archive_browse_empty">还没有任何记录</string>
+    <string name="archive_browse_count">%1$d 条</string>
+
+    <!-- Memo graph (笔记关系图) -->
+    <string name="memo_graph">笔记关系图</string>
+    <string name="memo_graph_empty">暂无关联笔记，先给 memo 添加 [[memo]] 双链吧</string>
+    <string name="memo_graph_hint">节点 = memo，连线 = [[双链]] 关联</string>
+    <string name="memo_graph_connected">%1$d 个节点 · %2$d 条连线</string>
+
+    <!-- Search filters (搜索增强) -->
+    <string name="search_filter_time">时间范围</string>
+    <string name="search_time_all">全部</string>
+    <string name="search_time_7d">近 7 天</string>
+    <string name="search_time_30d">近 30 天</string>
+    <string name="search_time_year">今年</string>
+    <string name="search_filter_visibility">可见性</string>
+    <string name="search_visibility_all">全部</string>
+    <string name="search_tag_all">全部标签</string>
+    <string name="search_no_result">没有找到匹配的 memo</string>
+    <string name="today">今天</string>
+    <string name="yesterday">昨天</string>
+    <string name="any_thoughts_placeholder">记录此刻的想法…</string>
 </resources>

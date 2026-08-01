@@ -1,7 +1,12 @@
 package me.mudkip.moememos.ui.page.memos
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Menu
@@ -12,7 +17,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -26,6 +33,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.navigation.NavHostController
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import me.mudkip.moememos.R
@@ -76,30 +84,52 @@ fun MemosHomePage(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(text = R.string.memos.string) },
+                title = {
+                    Row(
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Surface(
+                            onClick = {
+                                rootNavController.navigate(RouteName.INPUT)
+                            },
+                            shape = RoundedCornerShape(24.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(24.dp))
+                        ) {
+                            Text(
+                                text = R.string.any_thoughts_placeholder.string,
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier
+                                    .padding(horizontal = 18.dp, vertical = 10.dp)
+                            )
+                        }
+                        if (currentAccount !is Account.Local) {
+                            SyncStatusBadge(
+                                syncing = syncStatus.syncing,
+                                unsyncedCount = syncStatus.unsyncedCount,
+                                onSync = {
+                                    scope.launch {
+                                        requestManualSync()
+                                    }
+                                }
+                            )
+                        }
+                        IconButton(onClick = {
+                            navController.navigate(RouteName.SEARCH)
+                        }) {
+                            Icon(Icons.Filled.Search, contentDescription = R.string.search.string)
+                        }
+                    }
+                },
                 navigationIcon = {
                     if (drawerState != null) {
                         IconButton(onClick = { scope.launch { drawerState.open() } }) {
                             Icon(Icons.Filled.Menu, contentDescription = R.string.menu.string)
                         }
-                    }
-                },
-                actions = {
-                    if (currentAccount !is Account.Local) {
-                        SyncStatusBadge(
-                            syncing = syncStatus.syncing,
-                            unsyncedCount = syncStatus.unsyncedCount,
-                            onSync = {
-                                scope.launch {
-                                    requestManualSync()
-                                }
-                            }
-                        )
-                    }
-                    IconButton(onClick = {
-                        navController.navigate(RouteName.SEARCH)
-                    }) {
-                        Icon(Icons.Filled.Search, contentDescription = R.string.search.string)
                     }
                 }
             )

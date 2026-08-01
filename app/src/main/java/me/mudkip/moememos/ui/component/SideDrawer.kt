@@ -15,6 +15,9 @@ import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.HistoryEdu
+import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material3.DrawerState
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -205,6 +208,54 @@ fun SideDrawer(
                             restoreState = true
                         }
                         drawerState?.close()
+                    }
+                },
+                modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+            )
+        }
+        item {
+            NavigationDrawerItem(
+                label = { Text(R.string.stats.string) },
+                icon = { Icon(Icons.Outlined.BarChart, contentDescription = null) },
+                selected = isSelected(RouteName.STATS),
+                onClick = {
+                    scope.launch {
+                        drawerState?.close()
+                        rootNavController.navigate(RouteName.STATS) {
+                            launchSingleTop = true
+                        }
+                    }
+                },
+                modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+            )
+        }
+        item {
+            NavigationDrawerItem(
+                label = { Text(R.string.archive_browse.string) },
+                icon = { Icon(Icons.Outlined.CalendarMonth, contentDescription = null) },
+                selected = isSelected(RouteName.ARCHIVE_BROWSE),
+                onClick = {
+                    scope.launch {
+                        drawerState?.close()
+                        rootNavController.navigate(RouteName.ARCHIVE_BROWSE) {
+                            launchSingleTop = true
+                        }
+                    }
+                },
+                modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+            )
+        }
+        item {
+            NavigationDrawerItem(
+                label = { Text(R.string.memo_graph.string) },
+                icon = { Icon(Icons.Outlined.Hub, contentDescription = null) },
+                selected = isSelected(RouteName.MEMO_GRAPH),
+                onClick = {
+                    scope.launch {
+                        drawerState?.close()
+                        rootNavController.navigate(RouteName.MEMO_GRAPH) {
+                            launchSingleTop = true
+                        }
                     }
                 },
                 modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
