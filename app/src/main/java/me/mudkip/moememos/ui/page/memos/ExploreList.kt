@@ -23,7 +23,10 @@ fun ExploreList(
         modifier = Modifier.consumeWindowInsets(contentPadding),
         contentPadding = listContentPadding
     ) {
-        items(memos.itemCount) { index ->
+        items(
+            count = memos.itemCount,
+            key = { index -> memos[index]?.remoteId ?: "loading_$index" }
+        ) { index ->
             val memo = memos[index]
             memo?.let {
                 ExploreMemoCard(memo)

@@ -100,8 +100,9 @@ fun extractMemoLinks(markdownText: String): List<String> {
     findMemoLinkMatches(markdownText).forEach { result ->
         val startPosition = result.range.first
         val node = parsedTree.findNodeAtPosition(startPosition)
-        if (node != null && isMemoLinkSupportedNode(node)) {
-            targets.add(getMemoLinkTarget(result))
+        val target = getMemoLinkTarget(result)
+        if (node != null && target.isNotEmpty() && isMemoLinkSupportedNode(node)) {
+            targets.add(target)
         }
     }
 

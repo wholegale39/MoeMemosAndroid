@@ -336,7 +336,7 @@ private fun AddRelationDialog(
                 Text(R.string.no_memos.string)
             } else {
                 LazyColumn(modifier = Modifier.fillMaxWidth()) {
-                    items(candidates.size) { index ->
+                    items(candidates.size, key = { index -> candidates[index].identifier }) { index ->
                         val candidate = candidates[index]
                         val preview = (candidate.content.lineSequence().firstOrNull()?.trim()?.take(60)) ?: R.string.memo.string
                         Text(

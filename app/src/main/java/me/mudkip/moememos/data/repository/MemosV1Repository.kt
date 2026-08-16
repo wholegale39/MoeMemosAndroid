@@ -258,7 +258,7 @@ class MemosV1Repository(
     }
 }
 
-private fun relationTypeFromString(value: String?): RelationType {
+internal fun relationTypeFromString(value: String?): RelationType {
     return when (value?.uppercase()) {
         "RELATION_TYPE_REFERENCE", "REFERENCE" -> RelationType.REFERENCE
         "RELATION_TYPE_COMMENT", "COMMENT" -> RelationType.COMMENT
@@ -267,7 +267,7 @@ private fun relationTypeFromString(value: String?): RelationType {
     }
 }
 
-private fun relationTypeToString(type: RelationType): String {
+internal fun relationTypeToString(type: RelationType): String {
     return when (type) {
         RelationType.REFERENCE -> "RELATION_TYPE_REFERENCE"
         RelationType.COMMENT -> "RELATION_TYPE_COMMENT"
