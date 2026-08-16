@@ -11,6 +11,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -71,9 +73,17 @@ fun SearchPage(navController: NavHostController) {
         mutableStateOf(TextFieldValue())
     }
     var timeRange by rememberSaveable { mutableIntStateOf(0) }
+    var typeFilterIndex by rememberSaveable { mutableIntStateOf(0) }
+    var selectedTag by rememberSaveable { mutableStateOf<String?>(null) }
+    var tagMenuExpanded by rememberSaveable { mutableStateOf(false) }
 
+    val memosViewModel = LocalMemos.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        memosViewModel.loadTags()
+    }
 
     Scaffold(
         topBar = {
@@ -112,6 +122,36 @@ fun SearchPage(navController: NavHostController) {
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    item(key = "tag_filter") {
+                        Box {
+                            FilterChip(
+                                selected = selectedTag != null,
+                                onClick = { tagMenuExpanded = true },
+                                label = { Text(selectedTag ?: R.string.search_tag_all.string) }
+                            )
+                            DropdownMenu(
+                                expanded = tagMenuExpanded,
+                                onDismissRequest = { tagMenuExpanded = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text(R.string.search_tag_all.string) },
+                                    onClick = {
+                                        selectedTag = null
+                                        tagMenuExpanded = false
+                                    }
+                                )
+                                memosViewModel.tags.forEach { tag ->
+                                    DropdownMenuItem(
+                                        text = { Text("#$tag") },
+                                        onClick = {
+                                            selectedTag = tag
+                                            tagMenuExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
                     items(TimeRangeFilter.entries.size) { index ->
                         val filter = TimeRangeFilter.entries[index]
                         FilterChip(
@@ -120,12 +160,22 @@ fun SearchPage(navController: NavHostController) {
                             label = { Text(filter.labelRes.string) }
                         )
                     }
+                    items(SearchTypeFilter.entries.size) { index ->
+                        val filter = SearchTypeFilter.entries[index]
+                        FilterChip(
+                            selected = typeFilterIndex == index,
+                            onClick = { typeFilterIndex = index },
+                            label = { Text(filter.labelRes.string) }
+                        )
+                    }
                 }
 
                 MemosList(
                     contentPadding = PaddingValues(0.dp),
                     searchString = searchText.text,
+                    tag = selectedTag,
                     timeRangeStart = TimeRangeFilter.entries[timeRange].startInstant(),
+                    typeFilter = SearchTypeFilter.entries[typeFilterIndex],
                     onTagClick = { tag ->
                         navController.navigate("${RouteName.TAG}/${URLEncoder.encode(tag, "UTF-8")}") {
                             launchSingleTop = true

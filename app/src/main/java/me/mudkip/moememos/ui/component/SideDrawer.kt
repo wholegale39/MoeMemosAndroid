@@ -17,14 +17,18 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.HistoryEdu
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.CalendarMonth
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Hub
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DrawerState
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.NavigationDrawerItemDefaults
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -67,6 +71,7 @@ fun SideDrawer(
     var showHeatMap by remember {
         mutableStateOf(false)
     }
+    var tagToManage by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val memosViewModel = LocalMemos.current
     val userStateViewModel = LocalUserState.current
@@ -198,6 +203,22 @@ fun SideDrawer(
         }
         item {
             NavigationDrawerItem(
+                label = { Text(R.string.trash.string) },
+                icon = { Icon(Icons.Outlined.Delete, contentDescription = null) },
+                selected = isSelected(RouteName.TRASH),
+                onClick = {
+                    scope.launch {
+                        drawerState?.close()
+                        rootNavController.navigate(RouteName.TRASH) {
+                            launchSingleTop = true
+                        }
+                    }
+                },
+                modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+            )
+        }
+        item {
+            NavigationDrawerItem(
                 label = { Text(R.string.daily_review.string) },
                 icon = { Icon(Icons.Outlined.HistoryEdu, contentDescription = null) },
                 selected = isSelected(RouteName.DAILY_REVIEW),
@@ -294,10 +315,30 @@ fun SideDrawer(
                     tag = tag,
                     selected = isTagSelected(tag),
                     memosNavController = memosNavController,
-                    drawerState = drawerState
+                    drawerState = drawerState,
+                    onLongClick = { tagToManage = tag }
                 )
             }
         }
+    }
+
+    tagToManage?.let { tag ->
+        TagManageDialog(
+            tag = tag,
+            onRename = { newName ->
+                scope.launch {
+                    memosViewModel.renameTag(tag, newName)
+                    tagToManage = null
+                }
+            },
+            onRemove = {
+                scope.launch {
+                    memosViewModel.removeTag(tag)
+                    tagToManage = null
+                }
+            },
+            onDismiss = { tagToManage = null }
+        )
     }
 
     LaunchedEffect(Unit) {
@@ -305,4 +346,49 @@ fun SideDrawer(
         delay(0)
         showHeatMap = true
     }
+}
+
+@Composable
+private fun TagManageDialog(
+    tag: String,
+    onRename: (String) -> Unit,
+    onRemove: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    var newName by remember(tag) { mutableStateOf(tag) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(R.string.rename_tag.string) },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = newName,
+                    onValueChange = { newName = it.replace("#", "") },
+                    singleLine = true,
+                    label = { Text(R.string.tag_name.string) }
+                )
+                Text(
+                    text = R.string.remove_tag_desc.string,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.padding(top = 12.dp)
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onRename(newName.trim()) },
+                enabled = newName.isNotBlank() && newName.trim() != tag
+            ) { Text(R.string.confirm.string) }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = onRemove) {
+                    Text(R.string.delete.string, color = MaterialTheme.colorScheme.error)
+                }
+                TextButton(onClick = onDismiss) { Text(R.string.cancel.string) }
+            }
+        }
+    )
 }

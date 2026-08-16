@@ -53,6 +53,7 @@ fun MemosList(
     tag: String? = null,
     searchString: String? = null,
     timeRangeStart: java.time.Instant? = null,
+    typeFilter: SearchTypeFilter = SearchTypeFilter.ALL,
     additionalBottomPadding: Dp = 16.dp,
     onRefresh: (suspend () -> Unit)? = null,
     onTagClick: ((String) -> Unit)? = null,
@@ -71,7 +72,7 @@ fun MemosList(
     val scope = rememberCoroutineScope()
     var isRefreshing by remember { mutableStateOf(false) }
     var syncAlert by remember { mutableStateOf<PullRefreshSyncAlert?>(null) }
-    val filteredMemos = remember(viewModel.memos.toList(), tag, searchString, timeRangeStart) {
+    val filteredMemos = remember(viewModel.memos.toList(), tag, searchString, timeRangeStart, typeFilter) {
         val pinned = viewModel.memos.filter { it.pinned }
         val nonPinned = viewModel.memos.filter { !it.pinned }
         var fullList = pinned + nonPinned
@@ -97,8 +98,14 @@ fun MemosList(
             }
         }
 
+        if (typeFilter != SearchTypeFilter.ALL) {
+            fullList = fullList.filter { typeFilter.matches(it) }
+        }
+
         fullList
     }
+    val anyFilterActive = tag != null || !searchString.isNullOrEmpty() ||
+        timeRangeStart != null || typeFilter != SearchTypeFilter.ALL
     var listTopId: String? by rememberSaveable {
         mutableStateOf(null)
     }
@@ -138,6 +145,18 @@ fun MemosList(
             state = lazyListState,
             contentPadding = listContentPadding
         ) {
+            if (filteredMemos.isEmpty() && anyFilterActive) {
+                item(key = "no_result") {
+                    Text(
+                        text = R.string.search_no_result.string,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 24.dp)
+                    )
+                }
+            }
             var lastDayHeader: String? = null
             filteredMemos.forEach { memo ->
                 val dayHeader = dayGroupHeader(memo.date)

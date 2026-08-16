@@ -40,6 +40,23 @@ abstract class AbstractMemoRepository {
 
     open fun observeMemos(): Flow<List<MemoEntity>> = emptyFlow()
 
+    // Trash bin (flomo-style soft delete). Repositories backed by a local
+    // database override these; pure remote repositories keep the no-op
+    // defaults (their deletes are remote-only already).
+    open fun observeTrashedMemos(): Flow<List<MemoEntity>> = emptyFlow()
+
+    open suspend fun restoreTrashedMemo(identifier: String): ApiResponse<Unit> {
+        return ApiResponse.Success(Unit)
+    }
+
+    open suspend fun deleteMemoPermanently(identifier: String): ApiResponse<Unit> {
+        return ApiResponse.Success(Unit)
+    }
+
+    open suspend fun purgeExpiredTrashedMemos(retentionDays: Long = 30): Int {
+        return 0
+    }
+
     open suspend fun cacheResourceFile(identifier: String, downloadedUri: Uri): ApiResponse<Unit> {
         return ApiResponse.Success(Unit)
     }

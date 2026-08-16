@@ -21,19 +21,22 @@ private val Context.aiDataStore: DataStore<Preferences> by preferencesDataStore(
 
 /**
  * Stores user-configured OpenAI-compatible LLM endpoint, key, and model.
- * All values are kept in DataStore (device-local, non-encrypted — the key is
- * only as safe as the app's sandbox, same as any other preference).
+ * Endpoint/model live in DataStore; the API key is encrypted at rest via
+ * [SecureTokenStorage] (AndroidKeyStore AES/GCM). A legacy plaintext key in
+ * DataStore is migrated on first read.
  */
 class AiSettingsStorage(private val context: Context) {
 
+    private val secureTokenStorage = SecureTokenStorage(context)
+
     private val endpointKey = stringPreferencesKey("api_endpoint")
-    private val apiKeyKey = stringPreferencesKey("api_key")
+    private val legacyApiKeyKey = stringPreferencesKey("api_key")
     private val modelKey = stringPreferencesKey("model")
 
     val settings: Flow<AiSettings> = context.aiDataStore.data.map { prefs ->
         AiSettings(
             endpoint = prefs[endpointKey] ?: "",
-            apiKey = prefs[apiKeyKey] ?: "",
+            apiKey = secureApiKey(prefs[legacyApiKeyKey]),
             model = prefs[modelKey] ?: DEFAULT_MODEL,
         )
     }
@@ -43,13 +46,32 @@ class AiSettingsStorage(private val context: Context) {
     suspend fun update(endpoint: String, apiKey: String, model: String) {
         context.aiDataStore.edit { prefs ->
             prefs[endpointKey] = endpoint.trim()
-            prefs[apiKeyKey] = apiKey.trim()
             prefs[modelKey] = model.trim()
+            prefs.remove(legacyApiKeyKey)
         }
+        if (apiKey.isBlank()) {
+            secureTokenStorage.removeToken(AI_API_KEY_ENTRY)
+        } else {
+            secureTokenStorage.saveToken(AI_API_KEY_ENTRY, apiKey.trim())
+        }
+    }
+
+    private suspend fun secureApiKey(legacyPlainKey: String?): String {
+        val stored = secureTokenStorage.getToken(AI_API_KEY_ENTRY)
+        if (stored != null) {
+            return stored
+        }
+        if (!legacyPlainKey.isNullOrBlank()) {
+            secureTokenStorage.saveToken(AI_API_KEY_ENTRY, legacyPlainKey)
+            context.aiDataStore.edit { prefs -> prefs.remove(legacyApiKeyKey) }
+            return legacyPlainKey
+        }
+        return ""
     }
 
     companion object {
         const val DEFAULT_MODEL = "gpt-4o-mini"
+        private const val AI_API_KEY_ENTRY = "ai.llm.api_key"
     }
 }
 

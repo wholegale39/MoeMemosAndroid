@@ -14,7 +14,7 @@ import me.mudkip.moememos.data.local.entity.ResourceEntity
 
 @Dao
 interface MemoDao {
-    @Query("SELECT * FROM memos WHERE accountKey = :accountKey AND archived = 1 ORDER BY date DESC")
+    @Query("SELECT * FROM memos WHERE accountKey = :accountKey AND archived = 1 AND isDeleted = 0 ORDER BY date DESC")
     suspend fun getArchivedMemos(accountKey: String): List<MemoEntity>
 
     @Query("""
@@ -34,6 +34,20 @@ interface MemoDao {
 
     @Query("SELECT * FROM memos WHERE accountKey = :accountKey")
     suspend fun getAllMemosForSync(accountKey: String): List<MemoEntity>
+
+    @Transaction
+    @Query("""
+        SELECT * FROM memos
+        WHERE accountKey = :accountKey AND isDeleted = 1
+        ORDER BY lastModified DESC
+    """)
+    fun observeTrashedMemos(accountKey: String): Flow<List<MemoWithResources>>
+
+    @Query("""
+        SELECT * FROM memos
+        WHERE accountKey = :accountKey AND isDeleted = 1 AND deletedAt IS NOT NULL AND deletedAt < :cutoff
+    """)
+    suspend fun getExpiredTrashedMemos(accountKey: String, cutoff: Long): List<MemoEntity>
 
     @Query("SELECT COUNT(*) FROM memos WHERE accountKey = :accountKey AND needsSync = 1")
     suspend fun countUnsyncedMemos(accountKey: String): Int

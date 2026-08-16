@@ -39,6 +39,7 @@ import me.mudkip.moememos.ui.page.memos.DailyReviewPage
 import me.mudkip.moememos.ui.page.memos.StatsPage
 import me.mudkip.moememos.ui.page.memos.ArchiveBrowsePage
 import me.mudkip.moememos.ui.page.memos.MemoGraphPage
+import me.mudkip.moememos.ui.page.memos.TrashPage
 import me.mudkip.moememos.ui.page.resource.ResourceListPage
 import me.mudkip.moememos.ui.page.settings.SettingsPage
 import me.mudkip.moememos.ui.theme.MoeMemosTheme
@@ -124,6 +125,10 @@ fun Navigation() {
 
                 composable(RouteName.MEMO_GRAPH) {
                     MemoGraphPage(navController = navController)
+                }
+
+                composable(RouteName.TRASH) {
+                    TrashPage(navController = navController)
                 }
 
                 composable("${RouteName.TAG}/{tag}") { entry ->

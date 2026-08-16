@@ -33,6 +33,10 @@ class MemoService @Inject constructor(
         accountService.getRepository().observeMemos()
     }
 
+    val trashedMemos: Flow<List<MemoEntity>> = accountService.currentAccount.flatMapLatest {
+        accountService.getRepository().observeTrashedMemos()
+    }
+
     suspend fun sync(force: Boolean): ApiResponse<Unit> {
         return syncMutex.withLock {
             val now = System.currentTimeMillis()

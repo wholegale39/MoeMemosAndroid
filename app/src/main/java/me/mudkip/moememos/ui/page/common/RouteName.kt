@@ -19,4 +19,5 @@ object RouteName {
     const val STATS = "stats"
     const val ARCHIVE_BROWSE = "archive-browse"
     const val MEMO_GRAPH = "memo-graph"
+    const val TRASH = "trash"
 }

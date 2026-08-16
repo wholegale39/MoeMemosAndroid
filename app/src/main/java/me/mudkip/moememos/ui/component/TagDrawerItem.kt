@@ -1,5 +1,8 @@
 package me.mudkip.moememos.ui.component
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -24,46 +27,65 @@ import java.net.URLEncoder
  * Drawer item for a tag. Supports nested tags separated by "/" (e.g.
  * "读书/小说"): deeper tags are indented and shown with a sub-tag marker.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun TagDrawerItem(
     tag: String,
     selected: Boolean,
     memosNavController: NavHostController,
-    drawerState: DrawerState? = null
+    drawerState: DrawerState? = null,
+    onLongClick: (() -> Unit)? = null
 ) {
     val scope = rememberCoroutineScope()
     val segments = tag.split("/")
     val depth = (segments.size - 1).coerceAtLeast(0)
     val displayName = segments.last()
 
-    NavigationDrawerItem(
-        label = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Outlined.Tag,
-                    contentDescription = null,
-                    modifier = Modifier.size(if (depth == 0) 18.dp else 14.dp),
-                    tint = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = " $displayName",
-                    modifier = Modifier.padding(start = 2.dp)
-                )
-            }
-        },
-        icon = {},
-        selected = selected,
-        onClick = {
-            scope.launch {
-                memosNavController.navigate("${RouteName.TAG}/${URLEncoder.encode(tag, "UTF-8")}") {
-                    launchSingleTop = true
-                    restoreState = true
+    val item: @Composable () -> Unit = {
+        NavigationDrawerItem(
+            label = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Outlined.Tag,
+                        contentDescription = null,
+                        modifier = Modifier.size(if (depth == 0) 18.dp else 14.dp),
+                        tint = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = " $displayName",
+                        modifier = Modifier.padding(start = 2.dp)
+                    )
                 }
-                drawerState?.close()
-            }
-        },
-        modifier = Modifier
-            .padding(NavigationDrawerItemDefaults.ItemPadding)
-            .padding(start = (depth * 12).dp)
-    )
+            },
+            icon = {},
+            selected = selected,
+            onClick = {
+                scope.launch {
+                    memosNavController.navigate("${RouteName.TAG}/${URLEncoder.encode(tag, "UTF-8")}") {
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                    drawerState?.close()
+                }
+            },
+            modifier = Modifier
+                .padding(NavigationDrawerItemDefaults.ItemPadding)
+                .padding(start = (depth * 12).dp)
+        )
+    }
+
+    if (onLongClick != null) {
+        // Long-press falls through NavigationDrawerItem (it only handles taps)
+        // to the parent combinedClickable, opening tag management.
+        Box(
+            modifier = Modifier.combinedClickable(
+                onClick = {},
+                onLongClick = onLongClick
+            )
+        ) {
+            item()
+        }
+    } else {
+        item()
+    }
 }

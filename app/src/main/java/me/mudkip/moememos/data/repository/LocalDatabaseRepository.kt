@@ -141,6 +141,51 @@ class LocalDatabaseRepository(
         return try {
             val memo = memoDao.getMemoById(identifier, accountKey)
                 ?: return ApiResponse.Failure.Exception(Exception("Memo not found"))
+            val now = Instant.now()
+            memoDao.insertMemo(
+                memo.copy(
+                    isDeleted = true,
+                    deletedAt = now,
+                    needsSync = false,
+                    lastModified = now,
+                    lastSyncedAt = now
+                )
+            )
+            ApiResponse.Success(Unit)
+        } catch (e: Exception) {
+            ApiResponse.Failure.Exception(e)
+        }
+    }
+
+    override fun observeTrashedMemos(): Flow<List<MemoEntity>> {
+        return memoDao.observeTrashedMemos(accountKey).map { memos ->
+            memos.map { it.toMemoEntity() }
+        }
+    }
+
+    override suspend fun restoreTrashedMemo(identifier: String): ApiResponse<Unit> {
+        return try {
+            val memo = memoDao.getMemoById(identifier, accountKey)
+                ?: return ApiResponse.Failure.Exception(Exception("Memo not found"))
+            val now = Instant.now()
+            memoDao.insertMemo(
+                memo.copy(
+                    isDeleted = false,
+                    deletedAt = null,
+                    lastModified = now,
+                    lastSyncedAt = now
+                )
+            )
+            ApiResponse.Success(Unit)
+        } catch (e: Exception) {
+            ApiResponse.Failure.Exception(e)
+        }
+    }
+
+    override suspend fun deleteMemoPermanently(identifier: String): ApiResponse<Unit> {
+        return try {
+            val memo = memoDao.getMemoById(identifier, accountKey)
+                ?: return ApiResponse.Failure.Exception(Exception("Memo not found"))
             memoDao.getMemoResources(identifier, accountKey).forEach { resource ->
                 deleteLocalFile(resource)
                 memoDao.deleteResource(resource)
@@ -149,6 +194,23 @@ class LocalDatabaseRepository(
             ApiResponse.Success(Unit)
         } catch (e: Exception) {
             ApiResponse.Failure.Exception(e)
+        }
+    }
+
+    override suspend fun purgeExpiredTrashedMemos(retentionDays: Long): Int {
+        return try {
+            val cutoff = Instant.now().minus(retentionDays, java.time.temporal.ChronoUnit.DAYS)
+            val expired = memoDao.getExpiredTrashedMemos(accountKey, cutoff.toEpochMilli())
+            expired.forEach { memo ->
+                memoDao.getMemoResources(memo.identifier, accountKey).forEach { resource ->
+                    deleteLocalFile(resource)
+                    memoDao.deleteResource(resource)
+                }
+                memoDao.deleteMemo(memo)
+            }
+            expired.size
+        } catch (e: Exception) {
+            0
         }
     }
 

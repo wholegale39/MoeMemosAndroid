@@ -189,6 +189,7 @@ class SyncingRepository(
             memoDao.insertMemo(
                 memo.copy(
                     isDeleted = true,
+                    deletedAt = Instant.now(),
                     needsSync = true,
                     lastModified = Instant.now()
                 )
@@ -199,6 +200,84 @@ class SyncingRepository(
         } catch (e: Exception) {
             ApiResponse.Failure.Exception(e)
         }
+    }
+
+    override fun observeTrashedMemos(): Flow<List<MemoEntity>> {
+        return memoDao.observeTrashedMemos(accountKey).map { memos ->
+            memos.map { it.toMemoEntity() }
+        }
+    }
+
+    override suspend fun restoreTrashedMemo(identifier: String): ApiResponse<Unit> {
+        return try {
+            val memo = memoDao.getMemoById(identifier, accountKey)
+                ?: return ApiResponse.Failure.Exception(Exception("Memo not found"))
+            memoDao.insertMemo(
+                memo.copy(
+                    isDeleted = false,
+                    deletedAt = null,
+                    // If the remote delete already went through, the stale
+                    // remoteId must be dropped so the next sync force-creates
+                    // the memo on the server again.
+                    remoteId = if (memo.needsSync) memo.remoteId else null,
+                    needsSync = true,
+                    lastModified = Instant.now()
+                )
+            )
+            refreshUnsyncedCount()
+            enqueuePushMemo(identifier)
+            ApiResponse.Success(Unit)
+        } catch (e: Exception) {
+            ApiResponse.Failure.Exception(e)
+        }
+    }
+
+    override suspend fun deleteMemoPermanently(identifier: String): ApiResponse<Unit> {
+        return try {
+            val memo = memoDao.getMemoById(identifier, accountKey)
+                ?: return ApiResponse.Failure.Exception(Exception("Memo not found"))
+            // The remote copy may still exist when the tombstone was never pushed.
+            if (memo.needsSync) {
+                memo.remoteId?.let { remoteId -> remoteRepository.deleteMemo(remoteId) }
+            }
+            permanentlyDeleteMemo(identifier)
+            refreshUnsyncedCount()
+            ApiResponse.Success(Unit)
+        } catch (e: Exception) {
+            ApiResponse.Failure.Exception(e)
+        }
+    }
+
+    override suspend fun purgeExpiredTrashedMemos(retentionDays: Long): Int {
+        return try {
+            val cutoff = Instant.now().minus(retentionDays, java.time.temporal.ChronoUnit.DAYS)
+            val expired = memoDao.getExpiredTrashedMemos(accountKey, cutoff.toEpochMilli())
+            expired.forEach { permanentlyDeleteMemo(it.identifier) }
+            expired.size
+        } catch (e: Exception) {
+            0
+        }
+    }
+
+    /**
+     * Keeps a tombstoned memo as a trash entry: the remote delete already
+     * succeeded, so nothing is left to sync; the row stays locally until the
+     * retention window ([TRASH_RETENTION_DAYS]) expires.
+     */
+    private suspend fun keepAsTrashed(memo: MemoEntity) {
+        memoDao.insertMemo(
+            memo.copy(
+                isDeleted = true,
+                deletedAt = memo.deletedAt ?: Instant.now(),
+                needsSync = false,
+                lastSyncedAt = Instant.now()
+            )
+        )
+    }
+
+    private fun isTrashExpired(memo: MemoEntity): Boolean {
+        val deletedAt = memo.deletedAt ?: return true
+        return deletedAt.isBefore(Instant.now().minus(TRASH_RETENTION_DAYS, java.time.temporal.ChronoUnit.DAYS))
     }
 
     override suspend fun archiveMemo(identifier: String): ApiResponse<Unit> {
@@ -496,7 +575,7 @@ class SyncingRepository(
                 } else {
                     val deleted = remoteRepository.deleteMemo(remoteId)
                     if (deleted is ApiResponse.Success) {
-                        permanentlyDeleteMemo(local.identifier)
+                        keepAsTrashed(local)
                     } else {
                         recordFailure()
                     }
@@ -536,7 +615,11 @@ class SyncingRepository(
 
             if (local.remoteId != null && !remoteById.containsKey(local.remoteId)) {
                 if (local.isDeleted) {
-                    permanentlyDeleteMemo(local.identifier)
+                    if (isTrashExpired(local)) {
+                        permanentlyDeleteMemo(local.identifier)
+                    } else {
+                        keepAsTrashed(local)
+                    }
                 } else if (local.needsSync) {
                     if (!pushLocalMemo(local.identifier, forceCreate = true)) {
                         recordFailure()
@@ -549,7 +632,11 @@ class SyncingRepository(
 
             if (local.remoteId == null) {
                 if (local.isDeleted) {
-                    permanentlyDeleteMemo(local.identifier)
+                    if (isTrashExpired(local)) {
+                        permanentlyDeleteMemo(local.identifier)
+                    } else {
+                        keepAsTrashed(local)
+                    }
                 } else if (local.needsSync) {
                     if (!pushLocalMemo(local.identifier, forceCreate = true)) {
                         recordFailure()
@@ -603,13 +690,13 @@ class SyncingRepository(
             return if (local.remoteId != null) {
                 val deleted = remoteRepository.deleteMemo(local.remoteId)
                 if (deleted is ApiResponse.Success) {
-                    permanentlyDeleteMemo(local.identifier)
+                    keepAsTrashed(local)
                     true
                 } else {
                     false
                 }
             } else {
-                permanentlyDeleteMemo(local.identifier)
+                keepAsTrashed(local)
                 true
             }
         }
@@ -981,6 +1068,7 @@ class SyncingRepository(
     companion object {
         private const val ATTACHMENT_UPLOAD_FAILED_MESSAGE =
             "Failed to upload one or more attachments during sync"
+        private const val TRASH_RETENTION_DAYS = 30L
     }
 
 }

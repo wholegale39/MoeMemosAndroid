@@ -38,6 +38,7 @@ import me.mudkip.moememos.data.service.MemoService
 import me.mudkip.moememos.ext.getErrorMessage
 import me.mudkip.moememos.ext.string
 import me.mudkip.moememos.util.extractMemoLinks
+import me.mudkip.moememos.util.tagRewritePattern
 import me.mudkip.moememos.widget.WidgetUpdater
 import java.time.Instant
 import java.time.LocalDate
@@ -53,6 +54,8 @@ class MemosViewModel @Inject constructor(
 ) : ViewModel() {
 
     var memos = mutableStateListOf<MemoEntity>()
+        private set
+    var trashedMemos = mutableStateListOf<MemoEntity>()
         private set
     var tags = mutableStateListOf<String>()
         private set
@@ -165,6 +168,54 @@ class MemosViewModel @Inject constructor(
         }
     }
 
+    fun loadTrashedMemos() = viewModelScope.launch {
+        memoService.getRepository().purgeExpiredTrashedMemos()
+        memoService.trashedMemos.collectLatest { trashed ->
+            trashedMemos.clear()
+            trashedMemos.addAll(trashed)
+        }
+    }
+
+    suspend fun restoreTrashedMemo(identifier: String): Boolean = withContext(viewModelScope.coroutineContext) {
+        val restored = memoService.getRepository().restoreTrashedMemo(identifier) is ApiResponse.Success
+        if (restored) {
+            loadMemos(syncAfterLoad = true)
+        }
+        restored
+    }
+
+    suspend fun deleteMemoPermanently(identifier: String): Boolean = withContext(viewModelScope.coroutineContext) {
+        memoService.getRepository().deleteMemoPermanently(identifier) is ApiResponse.Success
+    }
+
+    /**
+     * Renames [oldTag] to [newTag] across all memos by rewriting the embedded
+     * `#tag` text (tags have no storage of their own). Nested tags under
+     * [oldTag] (e.g. `#oldTag/sub`) move along with it, mirroring flomo.
+     */
+    suspend fun renameTag(oldTag: String, newTag: String): Boolean = withContext(viewModelScope.coroutineContext) {
+        applyTagRewrite(tagRewritePattern(oldTag), "#$newTag")
+    }
+
+    /**
+     * Removes [tag] from all memos (the memos themselves are kept).
+     */
+    suspend fun removeTag(tag: String): Boolean = withContext(viewModelScope.coroutineContext) {
+        applyTagRewrite(tagRewritePattern(tag), "")
+    }
+
+    private suspend fun applyTagRewrite(pattern: Regex, replacement: String): Boolean = withContext(viewModelScope.coroutineContext) {
+        var allSucceeded = true
+        memos.toList().filter { pattern.containsMatchIn(it.content) }.forEach { memo ->
+            val newContent = memo.content.replace(pattern, replacement)
+            if (editMemo(memo.identifier, newContent, memo.resources, memo.visibility) !is ApiResponse.Success) {
+                allSucceeded = false
+            }
+        }
+        loadTags()
+        allSucceeded
+    }
+
     suspend fun updateMemoPinned(memoIdentifier: String, pinned: Boolean) = withContext(viewModelScope.coroutineContext) {
         memoService.getRepository().updateMemo(memoIdentifier, pinned = pinned).suspendOnSuccess {
             updateMemo(data)
@@ -265,17 +316,18 @@ class MemosViewModel @Inject constructor(
      */
     fun getBacklinks(identifier: String): List<MemoEntity> {
         val memo = memos.firstOrNull { it.identifier == identifier } ?: return emptyList()
-        val selfId = memo.remoteId ?: return emptyList()
+        val selfId = memo.remoteId ?: memo.identifier
         val selfName = selfId.substringAfterLast('/')
         return memos.filter { other ->
-            other.identifier != identifier && !other.remoteId.isNullOrBlank() &&
+            other.identifier != identifier &&
                 extractMemoLinks(other.content).any { t -> targetMatches(t, selfId, selfName) }
         }
     }
 
     private fun resolveMemoByTarget(target: String): MemoEntity? {
         return memos.firstOrNull { m ->
-            !m.remoteId.isNullOrBlank() && targetMatches(target, m.remoteId, m.remoteId.substringAfterLast('/'))
+            val id = m.remoteId ?: m.identifier
+            targetMatches(target, id, id.substringAfterLast('/'))
         }
     }
 
@@ -299,23 +351,25 @@ class MemosViewModel @Inject constructor(
     suspend fun addRelation(identifier: String, targetIdentifier: String): Boolean = withContext(viewModelScope.coroutineContext) {
         val memo = memos.firstOrNull { it.identifier == identifier } ?: return@withContext false
         val target = memos.firstOrNull { it.identifier == targetIdentifier } ?: return@withContext false
-        val targetRemoteId = target.remoteId ?: return@withContext false
+        // Local-only memos have no remote id yet; the local identifier keeps the
+        // [[link]] resolvable offline and is rewritten on sync once a remote id exists.
+        val targetLink = target.remoteId ?: target.identifier
 
-        val alreadyLinked = extractMemoLinks(memo.content).any { t -> targetMatches(t, targetRemoteId, targetRemoteId.substringAfterLast('/')) }
+        val alreadyLinked = extractMemoLinks(memo.content).any { t -> targetMatches(t, targetLink, targetLink.substringAfterLast('/')) }
         if (!alreadyLinked) {
-            val newContent = if (memo.content.isBlank()) "[[$targetRemoteId]]" else "${memo.content}\n\n[[$targetRemoteId]]"
+            val newContent = if (memo.content.isBlank()) "[[$targetLink]]" else "${memo.content}\n\n[[$targetLink]]"
             val editResp = editMemo(identifier, newContent, memo.resources, memo.visibility)
             if (editResp !is ApiResponse.Success) {
                 return@withContext false
             }
         }
 
-        // Best-effort: also persist server-side relations (no-op on legacy servers).
+        // Best-effort: also persist server-side relations (no-op on local and legacy servers).
         val existing = when (val r = getRelations(identifier)) {
             is ApiResponse.Success -> r.data
             else -> emptyList()
         }
-        val updated = (existing + MemoRelation(relatedMemoName = targetRemoteId, type = RelationType.REFERENCE))
+        val updated = (existing + MemoRelation(relatedMemoName = targetLink, type = RelationType.REFERENCE))
             .distinctBy { it.relatedMemoName }
         memoService.getRepository().setRelations(identifier, updated)
         true

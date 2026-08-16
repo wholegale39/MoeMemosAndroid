@@ -27,6 +27,7 @@ data class MemoEntity(
     override val archived: Boolean = false,
     val needsSync: Boolean = true,
     val isDeleted: Boolean = false,
+    val deletedAt: Instant? = null,
     val lastModified: Instant = Instant.now(),
     val lastSyncedAt: Instant? = null
 ) : MemoRepresentable {
