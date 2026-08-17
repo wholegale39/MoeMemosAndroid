@@ -243,6 +243,8 @@ private sealed class PullRefreshSyncAlert {
     data class Failed(val message: String) : PullRefreshSyncAlert()
 }
 
+private val dayHeaderFormatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd")
+
 /**
  * Returns a flomo-style day group header (今天 / 昨天 / 日期) for [instant].
  */
@@ -254,6 +256,6 @@ private fun dayGroupHeader(instant: java.time.Instant): String {
     return when (date) {
         today -> me.mudkip.moememos.R.string.today.string
         yesterday -> me.mudkip.moememos.R.string.yesterday.string
-        else -> date.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+        else -> date.format(dayHeaderFormatter)
     }
 }

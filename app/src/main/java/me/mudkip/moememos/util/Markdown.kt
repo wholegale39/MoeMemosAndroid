@@ -55,6 +55,12 @@ internal fun hasAncestorOfType(node: ASTNode, types: Set<IElementType>): Boolean
 }
 
 fun extractCustomTags(markdownText: String): Set<String> {
+    // Fast path: parsing builds a full AST, which is wasteful for the many
+    // memos that cannot contain a tag at all (tag scan / untagged filters /
+    // stats all call this per memo).
+    if ('#' !in markdownText) {
+        return emptySet()
+    }
     val parsedTree = MarkdownParser(GFMFlavourDescriptor()).parse(MarkdownElementTypes.MARKDOWN_FILE, markdownText)
     val tags = HashSet<String>()
 
@@ -94,6 +100,10 @@ internal fun isMemoLinkSupportedNode(node: ASTNode): Boolean {
  * skipping any that appear inside code spans/blocks, links, etc.
  */
 fun extractMemoLinks(markdownText: String): List<String> {
+    // Fast path — see extractCustomTags.
+    if ("[[" !in markdownText) {
+        return emptyList()
+    }
     val parsedTree = MarkdownParser(GFMFlavourDescriptor()).parse(MarkdownElementTypes.MARKDOWN_FILE, markdownText)
     val targets = LinkedHashSet<String>()
 
